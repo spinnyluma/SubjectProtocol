@@ -2,7 +2,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local CollectionService = game:GetService("CollectionService")
 local TweenService = game:GetService("TweenService")
 
-local AssertModule = require(ReplicatedStorage.Modules.Utilities.Debug.AssertModule)
+local AssertHelper = require(ReplicatedStorage.Modules.Helpers.Debug.AssertHelper)
 local DoorConfig = require(ReplicatedStorage.Modules.Shared.Constants.DoorConfig)
 
 local DoorStateSystem = {}
@@ -17,7 +17,7 @@ local DoorTweenInfo = TweenInfo.new(
 )
 
 local function SetDoorSegmentState(segment: BasePart, state: boolean)
-	local segmentIsValid = AssertModule.InvalidArgAssert(
+	local segmentIsValid = AssertHelper.InvalidArgAssert(
 		typeof(segment) == "Instance"
 		and segment:IsA("BasePart"),
 		segment,
@@ -26,7 +26,7 @@ local function SetDoorSegmentState(segment: BasePart, state: boolean)
 		"BasePart"
 	)
 	if not segmentIsValid then return end
-	local stateIsValid = AssertModule.InvalidArgAssert(
+	local stateIsValid = AssertHelper.InvalidArgAssert(
 		type(state) == "boolean",
 		state,
 		"state",
@@ -36,7 +36,7 @@ local function SetDoorSegmentState(segment: BasePart, state: boolean)
 	if not stateIsValid then return end
 	local openDoorOffset: CFrame? = segment:GetAttribute(DoorConfig.OPEN_DOOR_OFFSET_ATTR_NAME) 
 
-	local openDoorOffsetIsValid = AssertModule.ExpectedValAssert(
+	local openDoorOffsetIsValid = AssertHelper.ExpectedValAssert(
 		typeof(openDoorOffset) == "CFrame",
 		openDoorOffset,
 		"openDoorOffset",
@@ -66,7 +66,7 @@ local function InitializeDoorStateHandlers()
 	for _, door in securityDoors do
 		door:GetAttributeChangedSignal(DoorConfig.DOOR_STATE_ATTR_NAME):Connect(function()
 			local doorState: boolean? = door:GetAttribute(DoorConfig.DOOR_STATE_ATTR_NAME)
-			local doorStateIsValid = AssertModule.ExpectedValAssert(
+			local doorStateIsValid = AssertHelper.ExpectedValAssert(
 				type(doorState) == "string",
 				doorState,
 				"newAttributeValue",
@@ -75,7 +75,7 @@ local function InitializeDoorStateHandlers()
 			if not doorStateIsValid then return end
 			local upperSegment: BasePart? = door:FindFirstChild("UpperSegment")
 			local lowerSegment: BasePart? = door:FindFirstChild("LowerSegment")
-			local upperSegmentIsValid = AssertModule.ExpectedValAssert(
+			local upperSegmentIsValid = AssertHelper.ExpectedValAssert(
 				typeof(upperSegment) == "Instance"
 					and upperSegment:IsA("BasePart"),
 				upperSegment,
@@ -84,7 +84,7 @@ local function InitializeDoorStateHandlers()
 			)
 			if(not upperSegmentIsValid) then return end
 
-			local lowerSegmentIsValid = AssertModule.ExpectedValAssert(
+			local lowerSegmentIsValid = AssertHelper.ExpectedValAssert(
 				typeof(lowerSegment) == "Instance"
 					and lowerSegment:IsA("BasePart"),
 				lowerSegment,

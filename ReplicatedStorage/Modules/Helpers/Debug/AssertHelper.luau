@@ -1,6 +1,6 @@
 local LogService = game:GetService("LogService")
 
-local AssertModule = {}
+local AssertHelper = {}
 
 --[[
 	Asserts a condition.
@@ -12,16 +12,16 @@ local AssertModule = {}
 	@param condition boolean? The condition.
 	@returns boolean? The condition that was passed to the function.
 ]]
-function AssertModule.Assert(message: string, condition: boolean?): boolean?
+function AssertHelper.Assert(message: string, condition: boolean?): boolean?
 	if(type(message) ~= "string") then
-		warn(debug.traceback(`Invalid argument to AssertModule.Assert. string expected for message, got {message}`, 2))
+		warn(debug.traceback(`Invalid argument to AssertHelper.Assert. string expected for message, got {message}`, 2))
 		return	
 	end
 	
 	
 	if(type(condition) ~= "boolean"
 		and type(condition) ~= "nil") then
-		warn(debug.traceback(`Invalid argument to AssertModule.Assert. boolean? expected for condition, got {condition}`, 2))
+		warn(debug.traceback(`Invalid argument to AssertHelper.Assert. boolean? expected for condition, got {condition}`, 2))
 		return	
 	end
 	
@@ -45,7 +45,7 @@ end
 	@returns string? The condition that was passed to the function. If the condition is false, the function will return a traceback. 
 		If it was true or the arguments to this function were invalid, it will return nil.
 ]]
-function AssertModule.GetInvalidArgAssertMsg<T>(
+function AssertHelper.GetInvalidArgAssertMsg<T>(
 	condition: boolean,
 	value: T?,
 	valueName: string,
@@ -53,23 +53,23 @@ function AssertModule.GetInvalidArgAssertMsg<T>(
 	expectedType: string
 ): string?
 	if(type(condition) ~= "boolean") then
-		warn(debug.traceback(`Invalid argument to AssertModule.InvalidArgAssert. boolean expected for condition, got {condition}`, 2))
+		warn(debug.traceback(`Invalid argument to AssertHelper.InvalidArgAssert. boolean expected for condition, got {condition}`, 2))
 		return nil
 	end
 
 
 	if(type(valueName) ~= "string") then
-		warn(debug.traceback(`Invalid argument to AssertModule.InvalidArgAssert. string expected for valueName, got {valueName}`, 2))
+		warn(debug.traceback(`Invalid argument to AssertHelper.InvalidArgAssert. string expected for valueName, got {valueName}`, 2))
 		return nil
 	end
 
 	if(type(functionName) ~= "string") then
-		warn(debug.traceback(`Invalid argument to AssertModule.InvalidArgAssert. string expected for functionName, got {functionName}`, 2))
+		warn(debug.traceback(`Invalid argument to AssertHelper.InvalidArgAssert. string expected for functionName, got {functionName}`, 2))
 		return nil
 	end
 
 	if(type(expectedType) ~= "string") then
-		warn(debug.traceback(`Invalid argument to AssertModule.InvalidArgAssert. string expected for expectedType, got {expectedType}`, 2))
+		warn(debug.traceback(`Invalid argument to AssertHelper.InvalidArgAssert. string expected for expectedType, got {expectedType}`, 2))
 		return nil
 	end
 	
@@ -89,29 +89,29 @@ end
 	@param string expectedType The expected type of the value.
 	@returns boolean? The condition that was passed to the function if it was a boolean.
 ]]
-function AssertModule.InvalidArgAssert<T>(condition: boolean,
+function AssertHelper.InvalidArgAssert<T>(condition: boolean,
 	value: T?,
 	valueName: string,
 	functionName: string,
 	expectedType: string): boolean?
 	if(type(condition) ~= "boolean") then
-		warn(debug.traceback(`Invalid argument to AssertModule.InvalidArgAssert. boolean expected for condition, got {condition}`, 2))
+		warn(debug.traceback(`Invalid argument to AssertHelper.InvalidArgAssert. boolean expected for condition, got {condition}`, 2))
 		return nil
 	end
 
 	
 	if(type(valueName) ~= "string") then
-		warn(debug.traceback(`Invalid argument to AssertModule.InvalidArgAssert. string expected for valueName, got {valueName}`, 2))
+		warn(debug.traceback(`Invalid argument to AssertHelper.InvalidArgAssert. string expected for valueName, got {valueName}`, 2))
 		return condition
 	end
 	
 	if(type(functionName) ~= "string") then
-		warn(debug.traceback(`Invalid argument to AssertModule.InvalidArgAssert. string expected for functionName, got {functionName}`, 2))
+		warn(debug.traceback(`Invalid argument to AssertHelper.InvalidArgAssert. string expected for functionName, got {functionName}`, 2))
 		return condition
 	end
 	
 	if(type(expectedType) ~= "string") then
-		warn(debug.traceback(`Invalid argument to AssertModule.InvalidArgAssert. string expected for expectedType, got {expectedType}`, 2))
+		warn(debug.traceback(`Invalid argument to AssertHelper.InvalidArgAssert. string expected for expectedType, got {expectedType}`, 2))
 		return condition
 	end
 	
@@ -138,25 +138,25 @@ end
 	@param string expectedType The expected type of the value.
 	@returns boolean? The condition that was passed to the function.
 ]]
-function AssertModule.ExpectedValAssert<T>(condition: boolean,
+function AssertHelper.ExpectedValAssert<T>(condition: boolean,
 	value: T?,
 	valueName: string,
 	expectedType: string
 ): boolean?
 	if(type(condition) ~= "boolean") then
-		warn(debug.traceback(`Invalid argument to AssertModule.ExpectedValAssert. boolean expected for condition, got {condition}`, 2))
+		warn(debug.traceback(`Invalid argument to AssertHelper.ExpectedValAssert. boolean expected for condition, got {condition}`, 2))
 		return nil
 	end
 	
 	
 
 	if(type(valueName) ~= "string") then
-		warn(debug.traceback(`Invalid argument to AssertModule.ExpectedValAssert. string expected for valueName, got {valueName}`, 2))
+		warn(debug.traceback(`Invalid argument to AssertHelper.ExpectedValAssert. string expected for valueName, got {valueName}`, 2))
 		return condition
 	end
 	
 	if(type(expectedType) ~= "string") then
-		warn(debug.traceback(`Invalid argument to AssertModule.ExpectedValAssert. string expected for expectedType, got {expectedType}`, 2))
+		warn(debug.traceback(`Invalid argument to AssertHelper.ExpectedValAssert. string expected for expectedType, got {expectedType}`, 2))
 		return condition
 	end
 	
@@ -177,9 +177,9 @@ end
 	
 	@param message string The message to warn with.
 ]]
-function AssertModule.Warn(message: string)
-	local messageIsValid: boolean? = AssertModule.Assert(
-		`Invalid arguemnt to AssertModule.Warn. string expected for message, got {message}`,
+function AssertHelper.Warn(message: string)
+	local messageIsValid: boolean? = AssertHelper.Assert(
+		`Invalid arguemnt to AssertHelper.Warn. string expected for message, got {message}`,
 		type(message) == "string"
 	)
 	if(not messageIsValid) then
@@ -188,4 +188,4 @@ function AssertModule.Warn(message: string)
 	warn(debug.traceback(message, 2))
 end
 
-return AssertModule
+return AssertHelper

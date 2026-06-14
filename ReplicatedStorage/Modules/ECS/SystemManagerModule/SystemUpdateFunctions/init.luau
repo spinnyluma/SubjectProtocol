@@ -1,6 +1,6 @@
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
-local AssertModule = require(ReplicatedStorage.Modules.Utilities.Debug.AssertModule)
+local AssertHelper = require(ReplicatedStorage.Modules.Helpers.Debug.AssertHelper)
 local ModuleLoader = require(ReplicatedStorage.Modules.Framework.ModuleLoader)
 local SystemManagerModuleConstants = require(ReplicatedStorage
 	.Modules
@@ -17,7 +17,7 @@ local SystemUpdateFunctions = {}
 SystemUpdateFunctions.updateThreads = {}
 
 function SystemUpdateFunctions.GetUpdateThread(systemName: string): thread?
-	local systemNameIsValid: boolean? = AssertModule.Assert(
+	local systemNameIsValid: boolean? = AssertHelper.Assert(
 		`Invalid argument to SystemUpdateFunctions.GetUpdateThread. string expected for systemName, got {systemName}`,
 		type(systemName) == "string"
 	)
@@ -37,7 +37,7 @@ end
 
 
 function SystemUpdateFunctions.StartDeferredUpdateThread(systemModule: ModuleScript)
-	local systemModuleIsValid: boolean? = AssertModule.Assert(
+	local systemModuleIsValid: boolean? = AssertHelper.Assert(
 		`Invalid argument to SystemUpdateFunctions.StartDeferredUpdateThread. table expected for systemModule, got {systemModule}`,
 		typeof(systemModule) == "Instance"
 		and systemModule:IsA("ModuleScript")
@@ -50,12 +50,12 @@ function SystemUpdateFunctions.StartDeferredUpdateThread(systemModule: ModuleScr
 	local existentUpdateThread: thread? = SystemUpdateFunctions.GetUpdateThread(systemName)
 	local systemUpdateThreadExists: boolean = existentUpdateThread ~= nil
 	if(systemUpdateThreadExists) then
-		AssertModule.Warn(`System with name {systemName} is already running an update thread`)
+		AssertHelper.Warn(`System with name {systemName} is already running an update thread`)
 		return
 	end
 	local requiredSystemModule: ModuleScript? = ModuleLoader.Get(systemName)
 
-	local requiredSystemModuleIsValid: boolean? = AssertModule.Assert(
+	local requiredSystemModuleIsValid: boolean? = AssertHelper.Assert(
 		`table expected for requiredSystemModule, got {requiredSystemModule}`,
 		type(requiredSystemModule) == "table"
 	)
@@ -64,7 +64,7 @@ function SystemUpdateFunctions.StartDeferredUpdateThread(systemModule: ModuleScr
 	end
 	
 	local systemUpdateInterval: number? = systemModule:GetAttribute(SystemManagerModuleConstants.SYSTEM_UPDATE_INTERVAL_ATTR)
-	local systemUpdateIntervalIsValid: boolean? = AssertModule.Assert(
+	local systemUpdateIntervalIsValid: boolean? = AssertHelper.Assert(
 		`number expected for systemUpdateInterval, got {systemUpdateInterval}`,
 		type(systemUpdateInterval) == "number"
 	)
@@ -77,11 +77,11 @@ function SystemUpdateFunctions.StartDeferredUpdateThread(systemModule: ModuleScr
 	local deferredUpdateThread: thread = task.defer(function()
 
 		if(not requiredSystemModule.Update) then
-			AssertModule.Warn(`Update function expected for {requiredSystemModule}, got {requiredSystemModule.Update}`)
+			AssertHelper.Warn(`Update function expected for {requiredSystemModule}, got {requiredSystemModule.Update}`)
 			return
 		end
 		local systemManagerModule: {any?}? = ModuleLoader.Get("SystemManagerModule")
-		local systemManagerModuleIsValid: boolean? = AssertModule.Assert(
+		local systemManagerModuleIsValid: boolean? = AssertHelper.Assert(
 			`table expected for systemManagerModule, got {systemManagerModule}`,
 			type(systemManagerModule) == "table"
 		)
@@ -113,7 +113,7 @@ function SystemUpdateFunctions.StopUpdateThread(systemName: string): boolean
 end
 
 local function SystemStartPeriodicDeferStopUpdate(systemModuleName: string)
-	local systemModuleNameIsValid: boolean? = AssertModule.InvalidArgAssert(
+	local systemModuleNameIsValid: boolean? = AssertHelper.InvalidArgAssert(
 		type(systemModuleName) == "string",
 		systemModuleName,
 		"systemModuleName",
@@ -125,7 +125,7 @@ local function SystemStartPeriodicDeferStopUpdate(systemModuleName: string)
 	end
 	
 	local systemModule: {[string]: any?}? = ModuleLoader.Get(systemModuleName)
-	local systemModuleIsValid: boolean? = AssertModule.ExpectedValAssert(
+	local systemModuleIsValid: boolean? = AssertHelper.ExpectedValAssert(
 		type(systemModule) == "table",
 		systemModuleName,
 		"systemModuleName",
@@ -146,7 +146,7 @@ end
 
 
 local function OnSystemStartSignalPeriodicDeferUpdateInit(systemModuleToInitialize: ModuleScript)
-	local systemModuleToInitializeIsValid: boolean? = AssertModule.Assert(
+	local systemModuleToInitializeIsValid: boolean? = AssertHelper.Assert(
 		`Invalid argument to OnSystemStartSignalPeriodicDeferUpdateInit. ModuleScript expected for systemModuleToInitialize, got {systemModuleToInitialize}`,
 		typeof(systemModuleToInitialize) == "Instance"
 			and systemModuleToInitialize:IsA("ModuleScript")
@@ -176,7 +176,7 @@ end
 
 
 local function PeriodicDeferUpdateInit(systemModuleToInitialize: ModuleScript)
-	local systemModuleToInitializeIsValid: boolean? = AssertModule.Assert(
+	local systemModuleToInitializeIsValid: boolean? = AssertHelper.Assert(
 		`Invalid argument to PeriodicDeferUpdateInit. ModuleScript expected for systemModuleToInitialize, got {systemModuleToInitialize}`,
 		typeof(systemModuleToInitialize) == "Instance"
 			and systemModuleToInitialize:IsA("ModuleScript")
@@ -189,7 +189,7 @@ local function PeriodicDeferUpdateInit(systemModuleToInitialize: ModuleScript)
 end
 
 local function PeriodicUpdateInit(systemModuleToInitialize: ModuleScript)
-	local systemModuleToInitializeIsValid: boolean? = AssertModule.InvalidArgAssert(
+	local systemModuleToInitializeIsValid: boolean? = AssertHelper.InvalidArgAssert(
 		typeof(systemModuleToInitialize) == "Instance"
 		and systemModuleToInitialize:IsA("ModuleScript"),
 		systemModuleToInitialize,
@@ -203,7 +203,7 @@ local function PeriodicUpdateInit(systemModuleToInitialize: ModuleScript)
 	
 	task.spawn(function()
 		local updateInterval: number = systemModuleToInitialize:GetAttribute(SystemManagerModuleConstants.SYSTEM_UPDATE_INTERVAL_ATTR)
-		local updateIntervalIsValid: boolean? = AssertModule.ExpectedValAssert(
+		local updateIntervalIsValid: boolean? = AssertHelper.ExpectedValAssert(
 			type(updateInterval) == "number",
 			updateInterval,
 			"updateInterval",
@@ -215,7 +215,7 @@ local function PeriodicUpdateInit(systemModuleToInitialize: ModuleScript)
 		
 		local timeSinceLastUpdate = 0
 		local cachedModule = ModuleLoader.Get(systemModuleToInitialize.Name)
-		local cachedModuleIsValid: boolean? = AssertModule.ExpectedValAssert(
+		local cachedModuleIsValid: boolean? = AssertHelper.ExpectedValAssert(
 			type(cachedModule) == "table",
 			cachedModule,
 			"cachedModule",
@@ -226,7 +226,7 @@ local function PeriodicUpdateInit(systemModuleToInitialize: ModuleScript)
 		end
 		
 		local updateFunc: () -> ()? = cachedModule.Update
-		local updateFuncIsValid: boolean? = AssertModule.ExpectedValAssert(
+		local updateFuncIsValid: boolean? = AssertHelper.ExpectedValAssert(
 			type(updateFunc) == "function",
 			updateFunc,
 			"updateFunc",
@@ -257,7 +257,7 @@ local updateSystemInitFunctions = {
 
 
 function SystemUpdateFunctions.GetUpdateSystemInitFunction(systemUpdateIntervalType: SystemManagerModuleConstants.SystemUpdateIntervalType): ((ModuleScript) -> ())?
-	local systemUpdateIntervalTypeIsValid: boolean? = AssertModule.Assert(
+	local systemUpdateIntervalTypeIsValid: boolean? = AssertHelper.Assert(
 		`Invalid argument to SystemUpdateFunctions.GetUpdateSystemInitFunction. SystemManagerModuleConstants.SystemUpdateIntervalType expected for systemUpdateIntervalType, got {systemUpdateIntervalType}`,
 		SystemManagerModuleConstants.SYSTEM_UPDATE_INTERVAL_TYPES[systemUpdateIntervalType] ~= nil
 	)

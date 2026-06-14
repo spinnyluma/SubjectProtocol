@@ -1,5 +1,5 @@
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local AssertModule = require(ReplicatedStorage.Modules.Utilities.Debug.AssertModule)
+local AssertHelper = require(ReplicatedStorage.Modules.Helpers.Debug.AssertHelper)
 
 
 local InteractionHandlersConfig = require(script.Config)
@@ -9,7 +9,7 @@ local InteractionHandlers = {}
 
 
 function InteractionHandlers.HandleKeycardReaderQueried(trigger: BasePart)
-	local triggerIsValid = AssertModule.InvalidArgAssert(
+	local triggerIsValid = AssertHelper.InvalidArgAssert(
 		typeof(trigger) == "Instance"
 		and trigger:IsA("BasePart"),
 		trigger,
@@ -23,7 +23,7 @@ function InteractionHandlers.HandleKeycardReaderQueried(trigger: BasePart)
 	end
 	
 	local securityDoor: Model = trigger.Parent.Parent
-	local securityDoorIsModel = AssertModule.ExpectedValAssert(
+	local securityDoorIsModel = AssertHelper.ExpectedValAssert(
 		typeof(securityDoor) == "Instance"
 		and securityDoor:IsA("Model"),
 		securityDoor,
@@ -36,7 +36,7 @@ function InteractionHandlers.HandleKeycardReaderQueried(trigger: BasePart)
 	end
 	
 	local doorStateAttribute: boolean? = securityDoor:GetAttribute(DoorConfig.DOOR_STATE_ATTR_NAME)
-	local doorStateAttributeIsValid = AssertModule.ExpectedValAssert(
+	local doorStateAttributeIsValid = AssertHelper.ExpectedValAssert(
 		type(doorStateAttribute) == "string",
 		doorStateAttribute,
 		"doorStateAttribute",
@@ -52,7 +52,7 @@ function InteractionHandlers.HandleKeycardReaderQueried(trigger: BasePart)
 		or doorStateAttribute == DoorConfig.doorStates.Open.Name) then return end
 
 	local openDurationAttribute: number? = securityDoor:GetAttribute(InteractionHandlersConfig.OPEN_DURATION_ATTR_NAME)
-	local openDurationAttributeIsValid = AssertModule.ExpectedValAssert(
+	local openDurationAttributeIsValid = AssertHelper.ExpectedValAssert(
 		type(openDurationAttribute) == "number",
 		openDurationAttribute,
 		"openDurationAttribute",
@@ -62,7 +62,7 @@ function InteractionHandlers.HandleKeycardReaderQueried(trigger: BasePart)
 	if not openDurationAttributeIsValid then return end
 	
 	local closingDurationAttribute = securityDoor:GetAttribute(DoorConfig.CLOSING_DURATION_ATTR_NAME)
-	local closingDurationAttributeIsValid = AssertModule.ExpectedValAssert(
+	local closingDurationAttributeIsValid = AssertHelper.ExpectedValAssert(
 		type(closingDurationAttribute) == "number",
 		closingDurationAttribute,
 		"closingDurationAttribute",

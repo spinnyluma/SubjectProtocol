@@ -3,8 +3,8 @@ local CollectionService = game:GetService("CollectionService")
 local Players = game:GetService("Players")
 
 local ProximityConfig = require(script.Config)
-local AssertModule = require(ReplicatedStorage.Modules.Utilities.Debug.AssertModule)
-local SpatialQueryPresets = require(ReplicatedStorage.Modules.Utilities.Query.SpatialQueryPresets)
+local AssertHelper = require(ReplicatedStorage.Modules.Helpers.Debug.AssertHelper)
+local SpatialQueryPresets = require(ReplicatedStorage.Modules.Shared.Constants.SpatialQueryConfig)
 local InteractionHandlers = require(script.InteractionHandlers)
 
 local ProximitySystem = {}
@@ -23,7 +23,7 @@ local function PerformProximityQuery(origin: BasePart,
 	overlapParams: OverlapParams,
 	presetKey: string
 )
-	local originIsValid = AssertModule.InvalidArgAssert(
+	local originIsValid = AssertHelper.InvalidArgAssert(
 		typeof(origin) == "Instance"
 		and origin:IsA("BasePart"),
 		origin,
@@ -35,7 +35,7 @@ local function PerformProximityQuery(origin: BasePart,
 		return
 	end
 	
-	local interactionRadiusIsValid = AssertModule.InvalidArgAssert(
+	local interactionRadiusIsValid = AssertHelper.InvalidArgAssert(
 		type(interactionRadius) == "number",
 		interactionRadius,
 		"interactionRadius",
@@ -46,7 +46,7 @@ local function PerformProximityQuery(origin: BasePart,
 		return
 	end
 	
-	local overlapParamsIsValid = AssertModule.InvalidArgAssert(
+	local overlapParamsIsValid = AssertHelper.InvalidArgAssert(
 		typeof(overlapParams) == "OverlapParams",
 		overlapParams,
 		"overlapParams",
@@ -57,7 +57,7 @@ local function PerformProximityQuery(origin: BasePart,
 		return
 	end
 	
-	local presetKeyIsValid = AssertModule.InvalidArgAssert(
+	local presetKeyIsValid = AssertHelper.InvalidArgAssert(
 		type(presetKey) == "string",
 		presetKey,
 		"presetKey",
@@ -80,7 +80,7 @@ local function PerformProximityQuery(origin: BasePart,
 				continue
 			end
 			local onQueriedHandler: (queriedTarget: Model) -> ()? = onQueriedHandlers[target]
-			local onQueriedHandlerIsValid = AssertModule.ExpectedValAssert(
+			local onQueriedHandlerIsValid = AssertHelper.ExpectedValAssert(
 				type(onQueriedHandler) == "function",
 				onQueriedHandler,
 				"onQueriedHandler",
@@ -99,7 +99,7 @@ function ProximitySystem.Update(timeSinceLastUpdate: number)
 	local taggedInstances = CollectionService:GetTagged(ProximityConfig.SYSTEM_TAG_NAME)
 	for _, taggedInstance in taggedInstances do
 		local interactionRadius = taggedInstance:GetAttribute(ProximityConfig.INTERACTION_RADIUS_ATTR_NAME)
-		local interactionRadiusIsValid = AssertModule.ExpectedValAssert(
+		local interactionRadiusIsValid = AssertHelper.ExpectedValAssert(
 			typeof(interactionRadius) == "number",
 			interactionRadius,
 			"interactionRadius",
@@ -110,7 +110,7 @@ function ProximitySystem.Update(timeSinceLastUpdate: number)
 		end
 		
 		local origin: BasePart? = taggedInstance:FindFirstChild("Origin")
-		local originIsValid = AssertModule.ExpectedValAssert(
+		local originIsValid = AssertHelper.ExpectedValAssert(
 			typeof(origin) == "Instance"
 			and origin:IsA("BasePart"),
 			origin,
@@ -130,7 +130,7 @@ function ProximitySystem.Update(timeSinceLastUpdate: number)
 			break
 		end
 		
-		local presetKeyIsValid = AssertModule.ExpectedValAssert(
+		local presetKeyIsValid = AssertHelper.ExpectedValAssert(
 			typeof(presetKey) == "string",
 			presetKey,
 			"presetKey",
@@ -140,7 +140,7 @@ function ProximitySystem.Update(timeSinceLastUpdate: number)
 			continue
 		end
 		local overlapParamsFn = SpatialQueryPresets.overlapParams[presetKey]
-		local overlapParamsIsValid = AssertModule.ExpectedValAssert(
+		local overlapParamsIsValid = AssertHelper.ExpectedValAssert(
 			type(overlapParamsFn) == "function",
 			overlapParamsFn,
 			"overlapParams",
@@ -157,8 +157,10 @@ function ProximitySystem.Update(timeSinceLastUpdate: number)
 		if(not playerObtainedIsValid) then
 			continue
 		end
-		local overlapParams = overlapParamsFn(presetKey, taggedInstance.Parent)
-		local overlapParamsIsValid = AssertModule.ExpectedValAssert(
+		local overlapParams = overlapParamsFn(presetKey, {
+			["Player"] = playerModel
+		})
+		local overlapParamsIsValid = AssertHelper.ExpectedValAssert(
 			typeof(overlapParams) == "OverlapParams",
 			overlapParams,
 			"overlapParams",

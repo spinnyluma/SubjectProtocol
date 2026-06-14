@@ -6,11 +6,11 @@ local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 
 local SystemManagerModuleConstants = require(script.SystemManagerModuleConstants)
-local AssertModule = require(ReplicatedStorage
+local AssertHelper = require(ReplicatedStorage
 	.Modules
-	.Utilities
+	.Helpers
 	.Debug
-	.AssertModule)
+	.AssertHelper)
 local ModuleLoader = require(ReplicatedStorage.Modules.Framework.ModuleLoader)
 local FastSignal = require(ReplicatedStorage
 	.Modules
@@ -39,14 +39,14 @@ SystemManagerModule.world = {
 	@returns number? The index of the component for the entity if it was found.
 ]]
 function SystemManagerModule.GetComponentIndexByEntity(componentName: string, entity: Instance): number?
-	local componentNameIsValid: boolean? = AssertModule.Assert(
+	local componentNameIsValid: boolean? = AssertHelper.Assert(
 		`Invalid argument to SystemManager.GetComponentIndexByEntity. string expected for componentName, got {componentName}`,
 		type(componentName) == "string"
 	)
 	if(not componentNameIsValid) then
 		return nil
 	end
-	local entityIsValid: boolean? = AssertModule.Assert(
+	local entityIsValid: boolean? = AssertHelper.Assert(
 		`Invalid argument to SystemManager.GetComponentIndexByEntity. Instance | \{} expected for entity, got {entity}`,
 		typeof(entity) == "Instance"
 		or type(entity) == "table"
@@ -55,7 +55,7 @@ function SystemManagerModule.GetComponentIndexByEntity(componentName: string, en
 		return nil
 	end
 	local componentTable: {[string]: any?}? = SystemManagerModule.world["Components"][componentName]
-	local componentTableIsValid: boolean? = AssertModule.Assert(
+	local componentTableIsValid: boolean? = AssertHelper.Assert(
 		`Component with name {componentName} does not exist`,
 		type(componentTable) == "table"
 	)
@@ -74,7 +74,7 @@ end
 	@returns number? Gets the index for the last component in the component ("Data") table.
 ]]
 function SystemManagerModule.GetLastComponentIndex(componentName: string): number?
-	local componentNameIsValid: boolean? = AssertModule.Assert(
+	local componentNameIsValid: boolean? = AssertHelper.Assert(
 		`Invalid argument to SystemManagerModule.GetLastComponentIndex. string expected for componentName, got {componentName}`,
 		type(componentName) == "string"
 	)
@@ -85,7 +85,7 @@ function SystemManagerModule.GetLastComponentIndex(componentName: string): numbe
 	local currentComponentIndex: number = -1
 	
 	local dataIndexesToEntities: {[number]: Instance?}? = SystemManagerModule.GetComponentTableValueByKey(componentName, SystemManagerModuleConstants.COMPONENT_TABLE_KEYS.DataIndexToEntity.Name)
-	local dataIndexesToEntitiesIsValid: boolean? = AssertModule.Assert(
+	local dataIndexesToEntitiesIsValid: boolean? = AssertHelper.Assert(
 		`table expected for dataIndexesToEntities, got {dataIndexesToEntities}`,
 		type(dataIndexesToEntities) == "table"
 	)
@@ -110,7 +110,7 @@ end
 	@returns T? The component if it was found.
 ]]
 function SystemManagerModule.GetComponentByIndex<T>(componentName: string, index: number): T?
-	local componentNameIsValid: boolean? = AssertModule.Assert(
+	local componentNameIsValid: boolean? = AssertHelper.Assert(
 		`Invalid argument to SystemManagerModule.GetComponentByIndex. string expected for componentName, got {componentName}`,
 		type(componentName) == "string"
 	)
@@ -118,7 +118,7 @@ function SystemManagerModule.GetComponentByIndex<T>(componentName: string, index
 		return nil
 	end
 	
-	local indexIsValid: boolean? = AssertModule.Assert(
+	local indexIsValid: boolean? = AssertHelper.Assert(
 		`Invalid argument to SystemManagerModule.GetComponentByIndex. number expected for index, got {componentName}`,
 		type(componentName) == "string"
 	)
@@ -127,7 +127,7 @@ function SystemManagerModule.GetComponentByIndex<T>(componentName: string, index
 	end
 	
 	local componentTable: {[string]: any?}? = SystemManagerModule.world["Components"][componentName]
-	local componentTableIsValid: boolean? = AssertModule.Assert(
+	local componentTableIsValid: boolean? = AssertHelper.Assert(
 		`Component with name {componentName} does not exist`,
 		type(componentTable) == "table"
 	)
@@ -147,7 +147,7 @@ end
 	@returns T? The component if it was found.
 ]]
 function SystemManagerModule.GetComponentByEntity<T>(componentName: string, entity: Instance | {}): T?
-	local componentNameIsValid: boolean? = AssertModule.Assert(
+	local componentNameIsValid: boolean? = AssertHelper.Assert(
 		`Invalid argument to SystemManagerModule.GetComponentByEntity. string expected for componentName, got {componentName}`,
 		type(componentName) == "string"
 	)
@@ -155,7 +155,7 @@ function SystemManagerModule.GetComponentByEntity<T>(componentName: string, enti
 		return nil
 	end
 	
-	local entityIsValid: boolean? = AssertModule.Assert(
+	local entityIsValid: boolean? = AssertHelper.Assert(
 		`Invalid argument to SystemManagerModule.GetComponentByEntity. Instance | \{} expected for entity, got {entity}`,
 		typeof(entity) == "Instance"
 		or type(entity) == "table"
@@ -164,7 +164,7 @@ function SystemManagerModule.GetComponentByEntity<T>(componentName: string, enti
 		return nil
 	end
 	local componentIndex: number? = SystemManagerModule.GetComponentIndexByEntity(componentName, entity)
-	local componentIndexIsValid: boolean? = AssertModule.Assert(
+	local componentIndexIsValid: boolean? = AssertHelper.Assert(
 		`number expected for componentIndex, got {componentIndex}`,
 		type(componentIndex) == "number"
 	)
@@ -173,7 +173,7 @@ function SystemManagerModule.GetComponentByEntity<T>(componentName: string, enti
 	end
 	
 	local component: any? = SystemManagerModule.GetComponentByIndex(componentName, componentIndex)
-	local componentIsValid: boolean? = AssertModule.Assert(
+	local componentIsValid: boolean? = AssertHelper.Assert(
 		`table expected for component, got {component}`,
 		type(component) == "table"
 	)
@@ -195,7 +195,7 @@ end
 	@returns {[string]: {any}}? The component table if it was found.
 ]]
 function SystemManagerModule.GetComponentTableByComponentName(componentName: string): {[string]: {any}}?
-	local componentNameIsValid: boolean? = AssertModule.InvalidArgAssert(
+	local componentNameIsValid: boolean? = AssertHelper.InvalidArgAssert(
 		type(componentName) == "string",
 		componentName,
 		"componentName",
@@ -219,7 +219,7 @@ end
 	@returns {any?}? The component table value if it was found.
 ]]
 function SystemManagerModule.GetComponentTableValueByKey(componentName: string, componentTableKey: string): {any?}?
-	local componentNameIsValid: boolean? = AssertModule.Assert(
+	local componentNameIsValid: boolean? = AssertHelper.Assert(
 		`Invalid argument to SystemManagerModule.GetComponentTableValueByKey. string expected for componentName, got {componentName}`,
 		type(componentName) == "string"
 	)
@@ -227,7 +227,7 @@ function SystemManagerModule.GetComponentTableValueByKey(componentName: string, 
 		return nil
 	end
 	
-	local componentTableKeyIsValid: boolean? = AssertModule.Assert(
+	local componentTableKeyIsValid: boolean? = AssertHelper.Assert(
 		`Invalid argument to SystemManagerModule.GetComponentTableValueByKey. string for componentTableKey, got {componentTableKey}`,
 		type(componentTableKey) == "string"
 	)
@@ -236,7 +236,7 @@ function SystemManagerModule.GetComponentTableValueByKey(componentName: string, 
 	end
 	
 	local componentTable: {[string]: any?}? = SystemManagerModule.world["Components"][componentName]
-	local componentTableIsValid: boolean? = AssertModule.Assert(
+	local componentTableIsValid: boolean? = AssertHelper.Assert(
 		`table expected for componentTable, got {componentTable}`,
 		type(componentTable) == "table"
 	)
@@ -254,7 +254,7 @@ end
 	@returns {SharedTypes.CustomEnum?}? The systeem component enums by a system module name.
 ]]
 function SystemManagerModule.GetComponentsBySystemName(systemModuleName: string): {SharedTypes.CustomEnum?}?
-	local systemModuleNameIsValid: boolean? = AssertModule.Assert(
+	local systemModuleNameIsValid: boolean? = AssertHelper.Assert(
 		`Invalid argument to SystemManagerModule.GetComponentsToAddBySystemName. string expected for systemModuleName, got {systemModuleName}`,
 		type(systemModuleName) == "string"
 	)
@@ -263,7 +263,7 @@ function SystemManagerModule.GetComponentsBySystemName(systemModuleName: string)
 	end
 	
 	local requiredSystemConstants: {[string]: any?}? = ModuleLoader.Get(systemModuleName .. "Constants")
-	local requiredSystemConstantsIsValid: boolean? = AssertModule.Assert(
+	local requiredSystemConstantsIsValid: boolean? = AssertHelper.Assert(
 		`table expected for requiredSystemConstants, got {requiredSystemConstants}`,
 		type(requiredSystemConstants) == "table"
 	)
@@ -272,7 +272,7 @@ function SystemManagerModule.GetComponentsBySystemName(systemModuleName: string)
 	end
 
 	local systemComponents: {string?}? = requiredSystemConstants[SystemManagerModuleConstants.COMPONENTS_TO_ADD_VARIABLE_NAME]
-	local systemComponentsIsValid: boolean? = AssertModule.Assert(
+	local systemComponentsIsValid: boolean? = AssertHelper.Assert(
 		`table? expected for systemComponents, got {systemComponents}`,
 		type(systemComponents) == "table" or type(systemComponents) == "nil"
 	)
@@ -293,7 +293,7 @@ end
 function SystemManagerModule.GetComponentPropertyByName(systemModuleName: string, 
 	componentName: string,
 	componentPropertyName: string): any?
-	local systemModuleNameIsValid: boolean? = AssertModule.InvalidArgAssert(
+	local systemModuleNameIsValid: boolean? = AssertHelper.InvalidArgAssert(
 		type(systemModuleName) == "string",
 		systemModuleName,
 		"systemModuleName",
@@ -304,7 +304,7 @@ function SystemManagerModule.GetComponentPropertyByName(systemModuleName: string
 		return nil
 	end
 	
-	local componentNameIsValid: boolean? = AssertModule.InvalidArgAssert(
+	local componentNameIsValid: boolean? = AssertHelper.InvalidArgAssert(
 		type(componentName) == "string",
 		componentName,
 		"componentName",
@@ -315,7 +315,7 @@ function SystemManagerModule.GetComponentPropertyByName(systemModuleName: string
 		return nil
 	end
 	
-	local componentPropertyNameIsValid: boolean? = AssertModule.InvalidArgAssert(
+	local componentPropertyNameIsValid: boolean? = AssertHelper.InvalidArgAssert(
 		type(componentPropertyName) == "string",
 		componentPropertyName,
 		"componentPropertyName",
@@ -329,7 +329,7 @@ function SystemManagerModule.GetComponentPropertyByName(systemModuleName: string
 	local componentPropertyInfo: ComponentConstants.ComponentPropertyInfo = SystemManagerModule.GetComponentPropertyInfoBySystemName(
 		systemModuleName
 	)
-	local componentPropertyInfoIsValid: boolean? = AssertModule.ExpectedValAssert(
+	local componentPropertyInfoIsValid: boolean? = AssertHelper.ExpectedValAssert(
 		type(componentPropertyInfo) == "table",
 		componentPropertyInfo,
 		"componentPropertyInfo",
@@ -345,7 +345,7 @@ function SystemManagerModule.GetComponentPropertyByName(systemModuleName: string
 	end
 	
 	local property: any? = componentProperties[componentPropertyName]
-	local propertyIsValid: boolean? = AssertModule.ExpectedValAssert(
+	local propertyIsValid: boolean? = AssertHelper.ExpectedValAssert(
 		type(property) ~= "nil",
 		property,
 		"property",
@@ -363,7 +363,7 @@ end
 	@returns ComponentConstants.ComponentPropertyInfo? The component property info.
 ]]
 function SystemManagerModule.GetComponentPropertyInfoBySystemName(systemModuleName: string): ComponentConstants.ComponentPropertyInfo?
-	local systemModuleNameIsValid: boolean? = AssertModule.InvalidArgAssert(
+	local systemModuleNameIsValid: boolean? = AssertHelper.InvalidArgAssert(
 		type(systemModuleName) == "string",
 		systemModuleName,
 		"systemModuleName",
@@ -375,7 +375,7 @@ function SystemManagerModule.GetComponentPropertyInfoBySystemName(systemModuleNa
 	end
 	
 	local requiredSystemConstants: {[string]: any?}? = ModuleLoader.Get(systemModuleName .. "Constants")
-	local requiredSystemConstantsIsValid: boolean? = AssertModule.ExpectedValAssert(
+	local requiredSystemConstantsIsValid: boolean? = AssertHelper.ExpectedValAssert(
 		type(requiredSystemConstants) == "table",
 		requiredSystemConstants,
 		"requiredSystemConstants",
@@ -397,7 +397,7 @@ end
 		determines which components to add for an entity.
 ]]
 function SystemManagerModule.AddComponentsBySystemName(entity: Instance, systemName: string)
-	local entityIsValid: boolean? = AssertModule.Assert(
+	local entityIsValid: boolean? = AssertHelper.Assert(
 		`Invalid argument to SystemManagerModule.AddComponent. Instance expected for entity, got {entity}`,
 		typeof(entity) == "Instance"
 	)
@@ -405,7 +405,7 @@ function SystemManagerModule.AddComponentsBySystemName(entity: Instance, systemN
 		return
 	end
 	
-	local systemNameIsValid: boolean? = AssertModule.Assert(
+	local systemNameIsValid: boolean? = AssertHelper.Assert(
 		`Invalid argument to SystemManagerModule.AddComponent. string expected for systemName, got {systemName}`,
 		type(systemName) == "string"
 	)
@@ -432,7 +432,7 @@ end
 	@returns any? Returns the component that was added.
 ]]
 function SystemManagerModule.AddComponent(componentName: string, entity: Instance | {}): any?
-	local componentNameIsValid: boolean? = AssertModule.InvalidArgAssert(
+	local componentNameIsValid: boolean? = AssertHelper.InvalidArgAssert(
 		type(componentName) == "string",
 		componentName,
 		"componentName",
@@ -443,7 +443,7 @@ function SystemManagerModule.AddComponent(componentName: string, entity: Instanc
 		return nil
 	end
 	
-	local entityIsValid: boolean? = AssertModule.InvalidArgAssert(
+	local entityIsValid: boolean? = AssertHelper.InvalidArgAssert(
 		typeof(entity) == "Instance"
 		or type(entity) == "table",
 		entity,
@@ -463,7 +463,7 @@ function SystemManagerModule.AddComponent(componentName: string, entity: Instanc
 		SystemManagerModule.world["Components"][componentName][SystemManagerModuleConstants.COMPONENT_TABLE_KEYS.DataIndexToEntity.Name] = {}
 	end
 	local requiredComponentModule: {[string]: any?}? = ModuleLoader.Get(componentName .. "Component")
-	local requiredComponentModuleIsValid: boolean? = AssertModule.Assert(
+	local requiredComponentModuleIsValid: boolean? = AssertHelper.Assert(
 		`table expected for requiredComponentModule, got {requiredComponentModule}`,
 		type(requiredComponentModule) == "table"
 	)
@@ -472,7 +472,7 @@ function SystemManagerModule.AddComponent(componentName: string, entity: Instanc
 	end
 
 	local componentConstructor: (any?) -> any? = requiredComponentModule["new"]
-	local componentConstructorIsValid: boolean? = AssertModule.Assert(
+	local componentConstructorIsValid: boolean? = AssertHelper.Assert(
 		`function expected for componentConstructor, got {componentConstructor}`,
 		type(componentConstructor) == "function"
 	)
@@ -503,7 +503,7 @@ end
 function SystemManagerModule.DoesEntityComponentExist(componentName: string,
 	entity: Instance
 ): boolean
-	local componentNameIsValid: boolean? = AssertModule.InvalidArgAssert(
+	local componentNameIsValid: boolean? = AssertHelper.InvalidArgAssert(
 		type(componentName) == "string",
 		componentName,
 		"componentName",
@@ -514,7 +514,7 @@ function SystemManagerModule.DoesEntityComponentExist(componentName: string,
 		return false
 	end
 	
-	local entityIsValid: boolean? = AssertModule.InvalidArgAssert(
+	local entityIsValid: boolean? = AssertHelper.InvalidArgAssert(
 		typeof(entity) == "Instance",
 		entity,
 		"entity",
@@ -560,7 +560,7 @@ end
 	@returns boolean true if the component was removed successfully, false otherwise.
 ]]
 function SystemManagerModule.RemoveComponent(componentName: string, entity: Instance): boolean
-	local entityIsValid: boolean? = AssertModule.Assert(
+	local entityIsValid: boolean? = AssertHelper.Assert(
 		`Invalid argument to SystemManagerModule.RemoveComponent. Instance expected for entity, got {entity}`,
 		typeof(entity) == "Instance"
 	)
@@ -568,7 +568,7 @@ function SystemManagerModule.RemoveComponent(componentName: string, entity: Inst
 		return false
 	end
 	
-	local componentNameIsValid: boolean? = AssertModule.Assert(
+	local componentNameIsValid: boolean? = AssertHelper.Assert(
 		`Invalid argument to SystemManagerModule.RemoveComponent. string expected for componentName, got {componentName}`,
 		type(componentName) == "string"
 	)
@@ -579,7 +579,7 @@ function SystemManagerModule.RemoveComponent(componentName: string, entity: Inst
 	local componentDataTable: {any?}? = SystemManagerModule.GetComponentTableValueByKey(componentName,
 		SystemManagerModuleConstants.COMPONENT_TABLE_KEYS.Data.Name
 	)
-	local componentDataTableIsValid: boolean? = AssertModule.Assert(
+	local componentDataTableIsValid: boolean? = AssertHelper.Assert(
 		`table expected for componentDataTable, got {componentDataTable}`,
 		type(componentDataTable) == "table"
 	)
@@ -588,7 +588,7 @@ function SystemManagerModule.RemoveComponent(componentName: string, entity: Inst
 	end
 	
 	local entityComponentIndex: number? = SystemManagerModule.GetComponentIndexByEntity(componentName, entity)
-	local entityComponentIndexIsValid: boolean? = AssertModule.Assert(
+	local entityComponentIndexIsValid: boolean? = AssertHelper.Assert(
 		`Attempted to remove component {componentName} which does not exist for entity {entity}`,
 		type(entityComponentIndex) == "number"
 	)
@@ -597,7 +597,7 @@ function SystemManagerModule.RemoveComponent(componentName: string, entity: Inst
 	end
 
 	local component: {any?}? = componentDataTable[entityComponentIndex]
-	local componentIsValid: boolean? = AssertModule.Assert(
+	local componentIsValid: boolean? = AssertHelper.Assert(
 		`table expected for component, got {component}`,
 		type(component) == "table"
 	)
@@ -613,7 +613,7 @@ function SystemManagerModule.RemoveComponent(componentName: string, entity: Inst
 		componentName,
 		entity
 	)
-	local compClearedIsValid: boolean? = AssertModule.ExpectedValAssert(
+	local compClearedIsValid: boolean? = AssertHelper.ExpectedValAssert(
 		compCleared,
 		compCleared,
 		"compCleared",
@@ -627,7 +627,7 @@ function SystemManagerModule.RemoveComponent(componentName: string, entity: Inst
 		componentName,
 		SystemManagerModuleConstants.COMPONENT_TABLE_KEYS.DataIndexToEntity.Name
 	)
-	local dataIndexesToEntitiesIsValid: boolean? = AssertModule.Assert(
+	local dataIndexesToEntitiesIsValid: boolean? = AssertHelper.Assert(
 		`table expected for dataIndexesToEntities, got {dataIndexesToEntities}`,
 		type(dataIndexesToEntities) == "table"
 	)
@@ -640,7 +640,7 @@ function SystemManagerModule.RemoveComponent(componentName: string, entity: Inst
 		componentName,
 		SystemManagerModuleConstants.COMPONENT_TABLE_KEYS.EntityToDataIndex.Name
 	)
-	local entitiesToDataIndexesIsValid: boolean? = AssertModule.Assert(
+	local entitiesToDataIndexesIsValid: boolean? = AssertHelper.Assert(
 		`table expected for entitiesToDataIndexes, got {entitiesToDataIndexes}`,
 		type(entitiesToDataIndexes) == "table"
 	)
@@ -650,7 +650,7 @@ function SystemManagerModule.RemoveComponent(componentName: string, entity: Inst
 	
 	
 	local prevLastComponentIndex: number? = SystemManagerModule.GetLastComponentIndex(componentName)
-	local prevLastComponentIndexIsValid: boolean? = AssertModule.Assert(
+	local prevLastComponentIndexIsValid: boolean? = AssertHelper.Assert(
 		`number expected for prevLastComponentIndex, got {prevLastComponentIndex}`,
 		type(prevLastComponentIndex) == "number"
 	)
@@ -659,7 +659,7 @@ function SystemManagerModule.RemoveComponent(componentName: string, entity: Inst
 	end
 	
 	local prevLastComponentEntity: Instance? = dataIndexesToEntities[prevLastComponentIndex]
-	local prevLastComponentEntityIsValid: boolean? = AssertModule.Assert(
+	local prevLastComponentEntityIsValid: boolean? = AssertHelper.Assert(
 		`Instance expected for prevLastComponentEntity, got {prevLastComponentEntity}`,
 		typeof(prevLastComponentEntity) == "Instance"
 	)
@@ -668,7 +668,7 @@ function SystemManagerModule.RemoveComponent(componentName: string, entity: Inst
 	end
 	
 	local componentEntity: Instance? = dataIndexesToEntities[entityComponentIndex]
-	local componentEntityIsValid: boolean? = AssertModule.Assert(
+	local componentEntityIsValid: boolean? = AssertHelper.Assert(
 		`Instance expected for componentEntity, got {componentEntity}`,
 		typeof(componentEntity) == "Instance"
 	)
@@ -678,7 +678,7 @@ function SystemManagerModule.RemoveComponent(componentName: string, entity: Inst
 	
 	
 	local lastComponent: {any?}? = componentDataTable[prevLastComponentIndex]
-	local lastComponentIsValid: boolean? = AssertModule.Assert(
+	local lastComponentIsValid: boolean? = AssertHelper.Assert(
 		`table expected for lastComponent, got {lastComponent}`,
 		type(lastComponent) == "table"
 	)
@@ -725,7 +725,7 @@ end
 function SystemManagerModule.ClearComponentByEntity(componentName: string,
 	entity: Instance
 ): boolean
-	local componentNameIsValid: boolean? = AssertModule.InvalidArgAssert(
+	local componentNameIsValid: boolean? = AssertHelper.InvalidArgAssert(
 		type(componentName) == "string",
 		componentName,
 		"componentName",
@@ -736,7 +736,7 @@ function SystemManagerModule.ClearComponentByEntity(componentName: string,
 		return false
 	end
 	
-	local entityIsValid: boolean? = AssertModule.InvalidArgAssert(
+	local entityIsValid: boolean? = AssertHelper.InvalidArgAssert(
 		typeof(entity) == "Instance",
 		entity,
 		"entity",
@@ -748,7 +748,7 @@ function SystemManagerModule.ClearComponentByEntity(componentName: string,
 	end
 	
 	local component: any? = SystemManagerModule.GetComponentByEntity(componentName, entity)
-	local componentIsValid: boolean? = AssertModule.ExpectedValAssert(
+	local componentIsValid: boolean? = AssertHelper.ExpectedValAssert(
 		type(component) == "table",
 		component,
 		"component",
@@ -780,7 +780,7 @@ end
 	@param string systemName The name of the system to check.
 ]]
 function SystemManagerModule.IsSystemInitialized(systemName: string): boolean
-	local systemNameIsValid: boolean? = AssertModule.Assert(
+	local systemNameIsValid: boolean? = AssertHelper.Assert(
 		`Invalid argument to SystemManagerModule.IsSystemInitialized. string expected for systemName, got {systemName}`,
 		type(systemName) == "string"
 	)
@@ -796,7 +796,7 @@ function SystemManagerModule.IsSystemInitialized(systemName: string): boolean
 end
 
 local function InitializeUpdateSystem(systemModule: ModuleScript)
-	local systemModuleIsValid: boolean? = AssertModule.Assert(
+	local systemModuleIsValid: boolean? = AssertHelper.Assert(
 		`Invalid argument to InitializeUpdateSystem. ModuleScript expected for systemModule, got {systemModule}`,
 		typeof(systemModule) == "Instance"
 		and systemModule:IsA("ModuleScript")
@@ -807,7 +807,7 @@ local function InitializeUpdateSystem(systemModule: ModuleScript)
 	
 	
 	local systemUpdateIntervalType: string? = systemModule:GetAttribute(SystemManagerModuleConstants.SYSTEM_UPDATE_INTERVAL_TYPE_ATTR)
-	local systemUpdateIntervalTypeIsValid: boolean? = AssertModule.Assert(
+	local systemUpdateIntervalTypeIsValid: boolean? = AssertHelper.Assert(
 		`Module {systemModule.Name} expected to have {SystemManagerModuleConstants.SYSTEM_UPDATE_INTERVAL_TYPE_ATTR} attribute, got {systemUpdateIntervalType}`,
 		type(systemUpdateIntervalType) == "string"
 	)
@@ -835,7 +835,7 @@ local function GetSystemsFolder()
 end
 
 local function InitializeSystemComponents(requiredSystemModuleConstants: {[string]: any?}): boolean
-	local requiredSystemModuleConstantsIsValid: boolean? = AssertModule.InvalidArgAssert(
+	local requiredSystemModuleConstantsIsValid: boolean? = AssertHelper.InvalidArgAssert(
 		type(requiredSystemModuleConstants) == "table",
 		requiredSystemModuleConstants,
 		"requiredSystemModuleConstants",
@@ -867,7 +867,7 @@ local function InitializeSystemComponents(requiredSystemModuleConstants: {[strin
 end
 
 local function InitializeSystem(systemModule: ModuleScript): boolean
-	local systemModuleIsValid: boolean? = AssertModule.Assert(
+	local systemModuleIsValid: boolean? = AssertHelper.Assert(
 		`Invalid argument to InitializeUpdateSystem. ModuleScript expected for systemModule, got {systemModule}`,
 		typeof(systemModule) == "Instance"
 		and systemModule:IsA("ModuleScript")
@@ -878,7 +878,7 @@ local function InitializeSystem(systemModule: ModuleScript): boolean
 	
 	local systemModuleName: string = systemModule.Name
 	local requiredSystemModule: {[string]: any?}? = ModuleLoader.Get(systemModuleName)
-	local requiredSystemModuleIsValid: boolean? = AssertModule.Assert(
+	local requiredSystemModuleIsValid: boolean? = AssertHelper.Assert(
 		`table expected for requiredSystemModule, got {requiredSystemModule}`,
 		type(requiredSystemModule) == "table"
 	)
@@ -953,7 +953,7 @@ local function InitializeSystem(systemModule: ModuleScript): boolean
 					end
 
 					local removeComponentFunction: (string, string, string) -> ()? = SystemManagerModule.removeComponentFunctions[removeComponentTriggerType]
-					local removeComponentFunctionIsValid: boolean? = AssertModule.ExpectedValAssert(
+					local removeComponentFunctionIsValid: boolean? = AssertHelper.ExpectedValAssert(
 						type(removeComponentFunction) == "function",
 						removeComponentFunction,
 						"removeComponentFunction",
@@ -996,7 +996,7 @@ local function InitializeSystems()
 			if(systemInitialized and updateSystemInitialized) then
 				SystemManagerModule.systems[systemModuleName] = systemModule
 			else
-				AssertModule.Warn(`Failed to initialize system {systemModuleName} or update system`)
+				AssertHelper.Warn(`Failed to initialize system {systemModuleName} or update system`)
 			end
 			
 		end
@@ -1015,7 +1015,7 @@ local function PostInitializeSystems()
 			
 			local systemIsInitialized: boolean = SystemManagerModule.IsSystemInitialized(systemModuleName)
 			
-			local systemIsInitialized: boolean? = AssertModule.ExpectedValAssert(
+			local systemIsInitialized: boolean? = AssertHelper.ExpectedValAssert(
 				systemIsInitialized,
 				systemIsInitialized,
 				"systemIsInitialized",
@@ -1048,7 +1048,7 @@ function SystemManagerModule.Start()
 end
 
 local function InstantRemoveComponentHandler(componentName: string, entity: Instance, _)
-	local componentNameIsValid: boolean? = AssertModule.InvalidArgAssert(
+	local componentNameIsValid: boolean? = AssertHelper.InvalidArgAssert(
 		type(componentName) == "string",
 		componentName,
 		"componentName",
@@ -1058,7 +1058,7 @@ local function InstantRemoveComponentHandler(componentName: string, entity: Inst
 	if(not componentNameIsValid) then
 		return
 	end
-	local entityIsValid: boolean? = AssertModule.InvalidArgAssert(
+	local entityIsValid: boolean? = AssertHelper.InvalidArgAssert(
 		typeof(entity) == "Instance",
 		entity,
 		"entity",
@@ -1073,7 +1073,7 @@ local function InstantRemoveComponentHandler(componentName: string, entity: Inst
 end
 
 local function TimedRemoveComponentHandler(componentName: string, entity: Instance, systemModuleName: string)
-	local componentNameIsValid: boolean? = AssertModule.InvalidArgAssert(
+	local componentNameIsValid: boolean? = AssertHelper.InvalidArgAssert(
 		type(componentName) == "string",
 		componentName,
 		"componentName",
@@ -1083,7 +1083,7 @@ local function TimedRemoveComponentHandler(componentName: string, entity: Instan
 	if(not componentNameIsValid) then
 		return
 	end
-	local entityIsValid: boolean? = AssertModule.InvalidArgAssert(
+	local entityIsValid: boolean? = AssertHelper.InvalidArgAssert(
 		typeof(entity) == "Instance",
 		entity,
 		"entity",
@@ -1093,7 +1093,7 @@ local function TimedRemoveComponentHandler(componentName: string, entity: Instan
 	if(not entityIsValid) then
 		return
 	end
-	local systemModuleNameIsValid: boolean? = AssertModule.InvalidArgAssert(
+	local systemModuleNameIsValid: boolean? = AssertHelper.InvalidArgAssert(
 		type(systemModuleName) == "string",
 		systemModuleName,
 		"systemModuleName",
@@ -1109,7 +1109,7 @@ local function TimedRemoveComponentHandler(componentName: string, entity: Instan
 		componentName,
 		ComponentConstants.COMPONENT_PROPERTIES_KEYS.TimedTime.Name
 	)
-	local removeComponentTimeIsValid: boolean? = AssertModule.ExpectedValAssert(
+	local removeComponentTimeIsValid: boolean? = AssertHelper.ExpectedValAssert(
 		type(removeComponentTime) == "number",
 		removeComponentTime,
 		"removeComponentTime",
