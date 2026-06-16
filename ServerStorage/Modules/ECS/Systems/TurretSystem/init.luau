@@ -1,5 +1,6 @@
 local CollectionService = game:GetService("CollectionService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Players = game:GetService("Players")
 
 local TurretConfig = require(ReplicatedStorage.Modules.Shared.Constants.TurretConfig)
 local TurretSystemConfig = require(script.Config)
@@ -23,9 +24,64 @@ local CombatService = require(ReplicatedStorage
 	.CombatService
 )
 
+local replicateTurretRotationRE = ReplicatedStorage
+	.Assets
+	.Shared
+	.Remotes
+	.Events
+	.ReplicateTurretRotation
+
 local TURRET_RAY_LENGTH = 300
+local TURRET_SPREAD_RADIUS = 4
+
 
 local TurretSystem = {}
+
+local function FireTurretRay(player: Player,
+	firePoint: BasePart,
+	params: RaycastParams): RaycastResult? | Vector3?
+	local playerIsValid = AssertHelper.InvalidArgAssert(
+		typeof(player) == "Instance"
+			and player:IsA("Player"),
+		player,
+		"player",
+		"FireTurretRay",
+		"Player"
+	)
+	if(not playerIsValid) then return nil end
+	local firePointIsValid = AssertHelper.InvalidArgAssert(
+		typeof(firePoint) == "Instance"
+			and firePoint:IsA("BasePart"),
+		firePoint,
+		"firePoint",
+		"FireTurretRay",
+		"BasePart"
+	)
+	if(not firePointIsValid) then return nil end
+	
+	
+	local character = player.Character
+	if(not character) then return nil end
+
+	local parts = character:QueryDescendants("#UpperTorso, #Torso")
+	if(parts == 0) then return nil end
+	local torso: BasePart = parts[1]
+	
+	local firePointPosition = firePoint.Position
+	local torsoPosition = torso.Position
+	local unitVectorToCharacter = (torsoPosition - firePointPosition).Unit
+	local unitDirection = unitVectorToCharacter * TURRET_RAY_LENGTH
+	local spreadCframe: CFrame? = CombatService.GetRandomSpreadCframe(TURRET_SPREAD_RADIUS)
+	if(not spreadCframe) then return end
+	local rayDirection = spreadCframe:VectorToWorldSpace(unitDirection)
+	local raycastResult: RaycastResult? = CombatService.FireRay(
+		firePointPosition,
+		rayDirection,
+		params
+	)
+	if(not raycastResult) then return firePointPosition + rayDirection end
+	return raycastResult
+end
 
 local function ShootTurret(turret: Model)
 	local turretIsValid = AssertHelper.InvalidArgAssert(
@@ -52,9 +108,11 @@ local function ShootTurret(turret: Model)
 	local nearestPlayers = PlayerHelper.GetNearestPlayersFromPosition(firePoint.Position)
 	if(not nearestPlayers or (#nearestPlayers < 1)) then return end
 	
+	local firePointPosition = firePoint.Position
 	for index, table in nearestPlayers do
 		local nearestPlayer = nearestPlayers[index]
 		local player: Player? = nearestPlayer["Player"]
+		
 		local playerIsValid = AssertHelper.ExpectedValAssert(
 			typeof(player) == "Instance"
 				and player:IsA("Player"),
@@ -65,22 +123,6 @@ local function ShootTurret(turret: Model)
 		)
 		if(not playerIsValid) then continue end
 
-		local character: Model? = player.Character
-		if(not character) then continue end
-
-		local bodyParts: {BasePart?} = character:QueryDescendants("#UpperTorso, #Torso")
-		if(#bodyParts == 0) then continue end
-
-		local aimedBodyPart = bodyParts[1]
-		local aimedBodyPartIsValid = typeof(aimedBodyPart) == "Instance"
-			and aimedBodyPart:IsA("BasePart")
-		if(not aimedBodyPartIsValid) then continue end	
-		local unitVector: Vector3? = VectorHelper.GetUnitVectorBetweenParts(firePoint,
-			aimedBodyPart
-		) 
-		if(not unitVector) then continue end
-		local direction = unitVector * TURRET_RAY_LENGTH
-		
 		local paramsFn: (string, {[string]: any}) -> RaycastParams? = SpatialQueryConfig.raycastParams[TurretConfig.TURRET_TAG_NAME]
 		local paramsFnIsValid = AssertHelper.ExpectedValAssert(
 			typeof(paramsFn) == "function",
@@ -101,22 +143,53 @@ local function ShootTurret(turret: Model)
 		)
 		if(not paramsIsValid) then return end
 
-		local raycastResult: RaycastResult? = CombatService.FireRay(firePoint.Position,
-			direction,
+		local playerIsInViewOfPart = CombatService.IsPlayerInViewOfPart(
+			firePoint,
+			player,
+			TURRET_RAY_LENGTH,
 			params
 		)
-		if(not raycastResult) then continue end
+		if(not playerIsInViewOfPart) then continue end
+		local players = Players:GetPlayers()
 		
-		local instance = raycastResult.Instance
-		local instanceExistsInCharacter: boolean = CharacterHelper.IsPartExistentInCharacter(
-			character,
-			instance
-		)
-		if(not instanceExistsInCharacter) then continue end
+		local fireRayResult: RaycastResult? | Vector3? = FireTurretRay(player, firePoint, params)
 		
-		local damage = TurretSystemConfig.TURRET_DAMAGE
+		local resultIsRaycastResult = typeof(fireRayResult) == "RaycastResult"
+		local resultIsVector3 = typeof(fireRayResult) == "Vector3"
 		
-		CombatService.DamageCharacter(character, damage)
+		
+		
+		if(resultIsRaycastResult) then
+			local resultInstance = fireRayResult.Instance
+			local resultInstancePosition = resultInstance.Position
+
+			CombatService.ReplicateRay(firePoint,
+				resultInstancePosition,
+				players
+			)
+			
+			replicateTurretRotationRE:FireAllClients(turret, fireRayResult.Position)
+			
+			local character = player.Character
+			if(not character) then return end
+			local instanceIsInCharacter: boolean? = CharacterHelper.IsPartExistentInCharacter(character,
+				resultInstance
+			)
+			if(not instanceIsInCharacter) then return end
+			
+
+			local damage = TurretSystemConfig.TURRET_DAMAGE
+
+			CombatService.DamageCharacter(character, damage)
+			
+		elseif(resultIsVector3) then
+			CombatService.ReplicateRay(firePoint,
+				fireRayResult,
+				players
+			)
+		else
+			return nil
+		end
 	end
 	
 end

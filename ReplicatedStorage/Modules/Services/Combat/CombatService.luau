@@ -18,9 +18,15 @@ local CharacterHelper = require(ReplicatedStorage
 	.Character
 	.CharacterHelper
 )
+local VectorHelper = require(ReplicatedStorage
+	.Modules
+	.Helpers
+	.Vector
+	.VectorHelper)
 
 local replicateRayRE = ReplicatedStorage.Assets.Shared.Remotes.Events.ReplicateRay
 
+local RAYCAST_MAX_LENGTH = 15_000
 
 local CombatService = {}
 --[[
@@ -34,7 +40,7 @@ local CombatService = {}
 function CombatService.FireRay(origin: Vector3,
 	direction: Vector3,
 	params: RaycastParams
-)
+): RaycastResult?
 	local originIsValid: boolean = AssertHelper.InvalidArgAssert(
 		typeof(origin) == "Vector3",
 		origin,
@@ -60,19 +66,96 @@ function CombatService.FireRay(origin: Vector3,
 	return raycastResult
 end
 
+function CombatService.IsPlayerInViewOfPart(part: Vector3,
+	player: Player,
+	lengthOfRay: number,
+	raycastParams: RaycastParams
+)
+	local playerIsValid: boolean? = AssertHelper.InvalidArgAssert(
+		typeof(player) == "Instance"
+			and player:IsA("Player"),
+		player,
+		"player",
+		"IsPlayerInViewOfPart",
+		"Player"
+	)
+	if(not playerIsValid) then return false end
+	local partIsValid: boolean? = AssertHelper.InvalidArgAssert(
+		typeof(part) == "Instance"
+		and part:IsA("BasePart"),
+		part,
+		"part",
+		"CombatService.IsPlayerInViewOfPart",
+		"BasePart"
+	)
+	if(not partIsValid) then return false end
+	
+	local lengthOfRayIsValid: boolean? = AssertHelper.InvalidArgAssert(
+		typeof(part) == "Instance"
+		and part:IsA("BasePart"),
+		part,
+		"part",
+		"CombatService.IsPlayerInViewOfPart",
+		"number"
+	)
+	if(not lengthOfRayIsValid) then return false end
+	
+	local raycastParamsIsValid: boolean? = AssertHelper.InvalidArgAssert(
+		typeof(raycastParams) == "RaycastParams",
+		raycastParams,
+		"raycastParams",
+		"CombatService.IsPlayerInViewOfPart",
+		"RaycastParams"
+	)
+	if(not raycastParamsIsValid) then return false end
+	local character: Model? = player.Character
+	if(not character) then return false end
+
+	local bodyParts: {BasePart?} = character:QueryDescendants("#UpperTorso, #Torso")
+	if(#bodyParts == 0) then return false end
+
+	local aimedBodyPart = bodyParts[1]
+	local aimedBodyPartIsValid = typeof(aimedBodyPart) == "Instance"
+		and aimedBodyPart:IsA("BasePart")
+	if(not aimedBodyPartIsValid) then return false end	
+	local unitVector: Vector3? = VectorHelper.GetUnitVectorBetweenParts(part,
+		aimedBodyPart
+	) 
+	if(not unitVector) then return end
+
+	
+	local direction = unitVector * lengthOfRay
+
+	
+
+	local raycastResult: RaycastResult? = CombatService.FireRay(part.Position,
+		direction,
+		raycastParams
+	)
+	if(not raycastResult) then return false end
+	local instance = raycastResult.Instance
+	local instanceExistsInCharacter: boolean = CharacterHelper.IsPartExistentInCharacter(
+		character,
+		instance
+	)
+	if(not instanceExistsInCharacter) then return false end
+	return true
+end
+
 function CombatService.ReplicateRay(
-	origin: Vector3, 
+	originPart: BasePart, 
 	endPosition: Vector3,
 	playersToReplicateTo: {Player?}?
 )
-	local originIsValid: boolean = AssertHelper.InvalidArgAssert(
-		typeof(origin) == "Vector3",
-		origin,
-		"origin",
+	local originPartIsValid: boolean = AssertHelper.InvalidArgAssert(
+		typeof(originPart) == "Instance"
+		and originPart:IsA("BasePart"),
+		originPart,
+		"originPart",
 		"CombatService.ReplicateRay",
-		"Vector3"
+		"BasePart"
 	)
-	if(not originIsValid) then return end
+	if(not originPartIsValid) then return end
 	
 	local endPositionIsValid: boolean = AssertHelper.InvalidArgAssert(
 		typeof(endPosition) == "Vector3",
@@ -103,9 +186,40 @@ function CombatService.ReplicateRay(
 			"Player"
 		)
 		if(not clientIsValid) then continue end
-		replicateRayRE:FireClient(client, origin, endPosition)
+		replicateRayRE:FireClient(client, originPart, endPosition)
 
 	end
+end
+
+--[[
+	Gets a random spread CFrame from a given spread in degrees.
+	
+	@param number spreadInDegrees The spread in degrees.
+	@returns CFrame? The random spread CFrame.
+]]
+function CombatService.GetRandomSpreadCframe(spreadInDegrees: number): CFrame?
+	local spreadInDegreesIsValid: boolean? = AssertHelper.InvalidArgAssert(
+		type(spreadInDegrees) == "number",
+		spreadInDegrees,
+		"spreadInDegrees",
+		"CombatService.GetRandomSpreadCframe",
+		"number"
+	)
+	if(not spreadInDegreesIsValid) then return end
+	
+	--[[
+		We do (math.random - 0.5) * 2
+		because we want to get a range between -1 and 1
+	]]
+	local randomPitch = (math.random() - 0.5) * 2 * spreadInDegrees
+	local randomYaw = (math.random() - 0.5) * 2 * spreadInDegrees
+	
+	
+	return CFrame.Angles(
+		math.rad(randomPitch),
+		math.rad(randomYaw),
+		0
+	)
 end
 
 --[[
