@@ -6,6 +6,9 @@ local SpatialQueryConfig = {}
 local overlapParamsPresets = {
 	T_Keycard = {
 		ExcludeInstances = {"Player"}
+	},
+	T_Terminal = {
+		ExcludeInstances = {"Self"}
 	}
 }
 
@@ -14,6 +17,7 @@ local raycastParamsPresets = {
 		ExcludeInstances = {"Self"}
 	}
 }
+
 
 
 local function GetOverlapParams(presetKey: string, config: {[string]: any}): OverlapParams
@@ -211,11 +215,57 @@ local function GetTurretRaycastParams(presetKey: string, config: {[string]: any}
 	return raycastParams
 end
 
+function SpatialQueryConfig.GetConfigKeys(presetKey: string): {string?}?
+	local presetKeyIsValid: boolean? = AssertHelper.InvalidArgAssert(
+		type(presetKey) == "string",
+		presetKey,
+		"presetKey",
+		"GetConfig",
+		"string"
+	)
+	if(not presetKeyIsValid) then return end
+	
+	
+	local overlapParamsConfig: {[string]: any?}? = overlapParamsPresets[presetKey]
+	if(not overlapParamsConfig) then
+		local raycastParamsConfig: {[string]: any?}? = raycastParamsPresets[presetKey]
+		local raycastParamsConfigIsValid = AssertHelper.ExpectedValAssert(
+			type(raycastParamsConfig) == "table",
+			raycastParamsConfig,
+			"raycastParamsConfig",
+			"table"
+		)
+		if(not raycastParamsConfigIsValid) then return end
+		local keys = raycastParamsConfig.ExcludeInstances
+		return keys
+	else
+		local keys = overlapParamsConfig.ExcludeInstances
+		return keys
+	end
+end
+
+
 SpatialQueryConfig.overlapParams = {
-	T_Keycard = GetKeycardOverlapParams
+	T_Keycard = GetKeycardOverlapParams,
+	T_Terminal = GetOverlapParams
 }
 
 SpatialQueryConfig.raycastParams = {
 	T_Turret = GetTurretRaycastParams
 }
+
+SpatialQueryConfig.queryTypes = {
+	Radius = {
+		Name = "Radius",
+		Value = 0
+	},
+	Box = {
+		Name = "Box",
+		Value = 1
+	}
+}
+
+
+
+SpatialQueryConfig.QUERY_TYPE_ATTR_NAME = "A_QueryType"
 return SpatialQueryConfig

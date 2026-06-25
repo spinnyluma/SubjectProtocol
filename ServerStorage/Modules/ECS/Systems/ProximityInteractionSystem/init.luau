@@ -3,14 +3,18 @@ local CollectionService = game:GetService("CollectionService")
 local Players = game:GetService("Players")
 
 local ProximityConfig = require(script.Config)
+local ProximitySignals = require(script.Signals)
+
 local AssertHelper = require(ReplicatedStorage.Modules.Helpers.Debug.AssertHelper)
-local SpatialQueryPresets = require(ReplicatedStorage.Modules.Shared.Constants.SpatialQueryConfig)
+local SpatialQueryConfig = require(ReplicatedStorage.Modules.Shared.Constants.SpatialQueryConfig)
 local InteractionHandlers = require(script.InteractionHandlers)
+local DataModelHelper = require(ReplicatedStorage.Modules.Helpers.DataModel.DataModelHelper)
 
 local ProximitySystem = {}
 
 local queryTargets = {
-	T_Keycard = {"T_KeycardReader"}
+	T_Keycard = {"T_KeycardReader"},
+	T_Terminal = {"T_Player"},
 }
 
 
@@ -19,10 +23,11 @@ local onQueriedHandlers = {
 }
 
 local function PerformProximityQuery(origin: BasePart,
-	interactionRadius: number,
+	queryType: string,
 	overlapParams: OverlapParams,
-	presetKey: string
-)
+	presetKey: string,
+	interactionRadius: number?
+): {Instance?}?
 	local originIsValid = AssertHelper.InvalidArgAssert(
 		typeof(origin) == "Instance"
 		and origin:IsA("BasePart"),
@@ -36,15 +41,25 @@ local function PerformProximityQuery(origin: BasePart,
 	end
 	
 	local interactionRadiusIsValid = AssertHelper.InvalidArgAssert(
-		type(interactionRadius) == "number",
+		type(interactionRadius) == "number"
+		or type(interactionRadius) == "nil",
 		interactionRadius,
 		"interactionRadius",
 		"PerformProximityQuery",
-		"number"
+		"number?"
 	)
 	if(not interactionRadiusIsValid) then
 		return
 	end
+	local queryTypeIsValid = AssertHelper.InvalidArgAssert(
+		type(queryType) == "string"
+			and SpatialQueryConfig.queryTypes[queryType].Name ~= nil,
+		queryType,
+		"queryType",
+		"PerformProximityQuery",
+		"string"
+	)
+	if(not queryTypeIsValid) then return end
 	
 	local overlapParamsIsValid = AssertHelper.InvalidArgAssert(
 		typeof(overlapParams) == "OverlapParams",
@@ -67,69 +82,66 @@ local function PerformProximityQuery(origin: BasePart,
 	if(not presetKeyIsValid) then
 		return
 	end
-	
-	local parts = workspace:GetPartBoundsInRadius(origin.Position,
-		interactionRadius,
-		overlapParams
-	)
-	
-	for _, part in parts do
-		for _, target in queryTargets[presetKey] do			
-			local isTargetInstance = CollectionService:HasTag(part, target)
-			if(not isTargetInstance) then
-				continue
-			end
-			local onQueriedHandler: (queriedTarget: Model) -> ()? = onQueriedHandlers[target]
-			local onQueriedHandlerIsValid = AssertHelper.ExpectedValAssert(
-				type(onQueriedHandler) == "function",
-				onQueriedHandler,
-				"onQueriedHandler",
-				"function"
-			)
-
-			if(not onQueriedHandlerIsValid) then
-				continue
-			end
-			onQueriedHandler(part)
-		end
+	local parts: {Part?}? = nil
+	if(queryType == SpatialQueryConfig.queryTypes.Radius.Name) then
+		parts = workspace:GetPartBoundsInRadius(origin.Position,
+			interactionRadius,
+			overlapParams
+		)
+	elseif(queryType == SpatialQueryConfig.queryTypes.Box.Name) then
+		local boxSize = Vector3.new(
+			origin.Size.X,
+			origin.Size.Y,
+			origin.Size.Z
+		)
+		
+		parts = workspace:GetPartBoundsInBox(origin.CFrame,
+			boxSize,
+			overlapParams
+		)
 	end
+	local targetParents = {}
+	local parentTagName = ProximityConfig.parentTagNames[presetKey]
+	for _, part in parts do
+		local targetParent = DataModelHelper.GetRootParentWithTag(part, parentTagName)
+		if(not targetParent) then continue end
+		local targetParentIndex = table.find(targetParents, targetParent)
+		if(typeof(targetParentIndex) == "number") then
+			continue
+		end
+		table.insert(targetParents, targetParent)
+	end
+	
+	return targetParents
 end
 
 function ProximitySystem.Update(timeSinceLastUpdate: number)
 	local taggedInstances = CollectionService:GetTagged(ProximityConfig.SYSTEM_TAG_NAME)
 	for _, taggedInstance in taggedInstances do
-		local interactionRadius = taggedInstance:GetAttribute(ProximityConfig.INTERACTION_RADIUS_ATTR_NAME)
-		local interactionRadiusIsValid = AssertHelper.ExpectedValAssert(
-			typeof(interactionRadius) == "number",
-			interactionRadius,
-			"interactionRadius",
-			"number"
-		)
-		if(not interactionRadiusIsValid) then
+		if(not taggedInstance:IsDescendantOf(workspace)) then
 			continue
 		end
 		
-		local origin: BasePart? = taggedInstance:FindFirstChild("Origin")
-		local originIsValid = AssertHelper.ExpectedValAssert(
-			typeof(origin) == "Instance"
-			and origin:IsA("BasePart"),
-			origin,
-			"origin",
-			"BasePart"	
+		local queryType = taggedInstance:GetAttribute(SpatialQueryConfig.QUERY_TYPE_ATTR_NAME)
+		local queryTypeIsValid = AssertHelper.ExpectedValAssert(
+			type(queryType) == "string"
+				and SpatialQueryConfig.queryTypes[queryType].Name ~= nil,
+			queryType,
+			"queryType",
+			"string"
 		)
-		if(not originIsValid) then
-			continue
-		end
+		if(not queryTypeIsValid) then continue end
+		local interactionRadius: number? = nil
 		
 		local presetKey: string? = nil
-		for overlapParamTagName, _ in SpatialQueryPresets.overlapParams do
+		for overlapParamTagName, _ in SpatialQueryConfig.overlapParams do
 			if(not CollectionService:HasTag(taggedInstance, overlapParamTagName)) then
 				continue
 			end
 			presetKey = overlapParamTagName
 			break
 		end
-		
+
 		local presetKeyIsValid = AssertHelper.ExpectedValAssert(
 			typeof(presetKey) == "string",
 			presetKey,
@@ -139,7 +151,24 @@ function ProximitySystem.Update(timeSinceLastUpdate: number)
 		if(not presetKeyIsValid) then
 			continue
 		end
-		local overlapParamsFn = SpatialQueryPresets.overlapParams[presetKey]
+		
+		
+		if(queryType == SpatialQueryConfig.queryTypes.Radius.Name) then
+			interactionRadius = taggedInstance:GetAttribute(ProximityConfig.INTERACTION_RADIUS_ATTR_NAME)
+			local interactionRadiusIsValid = AssertHelper.ExpectedValAssert(
+				type(interactionRadius) == "number",
+				interactionRadius,
+				"interactionRadius",
+				"number"
+			)
+			if(not interactionRadiusIsValid) then
+				continue
+			end
+		end
+		
+		
+		
+		local overlapParamsFn = SpatialQueryConfig.overlapParams[presetKey]
 		local overlapParamsIsValid = AssertHelper.ExpectedValAssert(
 			type(overlapParamsFn) == "function",
 			overlapParamsFn,
@@ -149,29 +178,47 @@ function ProximitySystem.Update(timeSinceLastUpdate: number)
 		if(not overlapParamsIsValid) then
 			continue
 		end
-		
-		local playerModel: any = taggedInstance.Parent
-		local playerObtained: Player? = Players:GetPlayerFromCharacter(playerModel)
-		local playerObtainedIsValid: boolean = typeof(playerObtained) == "Instance"
-			and playerObtained:IsA("Player")
-		if(not playerObtainedIsValid) then
-			continue
+		local configKeys = SpatialQueryConfig.GetConfigKeys(presetKey)
+		local config: {[string]: any?} = {}
+		for _, configKey in configKeys do
+			if(configKey == "Player") then
+				local playerModel: any = taggedInstance.Parent
+				local playerObtained: Player? = Players:GetPlayerFromCharacter(playerModel)
+				local playerObtainedIsValid: boolean = typeof(playerObtained) == "Instance"
+					and playerObtained:IsA("Player")
+				if(not playerObtainedIsValid) then
+					continue
+				end
+				config["Player"] = playerModel
+				
+			elseif(configKey == "Self") then
+				config["Self"] = taggedInstance
+			end
 		end
-		local overlapParams = overlapParamsFn(presetKey, {
-			["Player"] = playerModel
-		})
+		
+		local overlapParams: OverlapParams? = overlapParamsFn(presetKey, config)
 		local overlapParamsIsValid = AssertHelper.ExpectedValAssert(
 			typeof(overlapParams) == "OverlapParams",
 			overlapParams,
 			"overlapParams",
 			"OverlapParams"
 		)
-		if(not overlapParamsIsValid) then
+		if(not overlapParamsIsValid) then continue end
+		local origin: BasePart? = taggedInstance:FindFirstChild("Origin")
+		local originIsValid = AssertHelper.ExpectedValAssert(
+			typeof(origin) == "Instance"
+				and origin:IsA("BasePart"),
+			origin,
+			"origin",
+			"BasePart"	
+		)
+		if(not originIsValid) then
 			continue
 		end
+		local instancesFound = PerformProximityQuery(origin, queryType, overlapParams, presetKey, interactionRadius)
+		if(not instancesFound) then return end
 		
-		PerformProximityQuery(origin, interactionRadius, overlapParams, presetKey)
-		
+		ProximitySignals.ProximityObjectsFound:Fire(presetKey, taggedInstance, instancesFound)
 	end
 end
 

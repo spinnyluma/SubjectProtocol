@@ -195,16 +195,16 @@ local function ShootTurret(turret: Model)
 end
 
 function TurretSystem.Update()
-	local turrets: {Model?} = CollectionService:GetTagged(TurretConfig.TURRET_TAG_NAME)
+	--local turrets: {Model?} = CollectionService:GetTagged(TurretConfig.TURRET_TAG_NAME)
 
-	for _, turret in turrets do
-		local barrel: BasePart? = turret:FindFirstChild("Barrel")
-		local barrelIsValid = typeof(barrel) == "Instance"
-			and barrel:IsA("BasePart")
+	--for _, turret in turrets do
+	--	local barrel: BasePart? = turret:FindFirstChild("Barrel")
+	--	local barrelIsValid = typeof(barrel) == "Instance"
+	--		and barrel:IsA("BasePart")
 		
-		if(not barrelIsValid) then continue end
-		ShootTurret(turret)
-	end
+	--	if(not barrelIsValid) then continue end
+	--	ShootTurret(turret)
+	--end
 end
 
 

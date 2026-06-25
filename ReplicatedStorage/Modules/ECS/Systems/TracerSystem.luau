@@ -14,6 +14,8 @@ function TracerSystem.Initialize()
 	replicateRayRE.OnClientEvent:Connect(function(originPart: BasePart,
 		endPosition: Vector3
 	)
+		if(not originPart) then return end
+		
 		local originPartPosition: Vector3 = originPart.Position
 		
 		local cframe1: CFrame = CFrame.new(originPartPosition)
