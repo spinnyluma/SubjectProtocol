@@ -36,7 +36,7 @@ TerminalConfig.teamsOnTerminalStates = {
 		Value = 1
 	},
 	NumberOfTeamsOnTerminal = {
-		Name = "nTeamsOnTerminal",
+		Name = "NumberOfTeamsOnTerminal",
 		Value = 2
 	},
 	NoTeamsOnTerminal = {
@@ -46,10 +46,23 @@ TerminalConfig.teamsOnTerminalStates = {
 	
 }
 
+TerminalConfig.terminalOwnerToOwnerMsgMap = {
+	[TeamConfig.teams.Guards.Team] = "Terminal secure",
+	[TeamConfig.teams.Subjects.Team] = "Subjects are controlling terminal"
+}
+
 TerminalConfig.contestStateToTeamsMap = {
 	[TerminalConfig.terminalContestStates.GuardsContesting.Name] = TeamConfig.teams.Guards.Team,
 	[TerminalConfig.terminalContestStates.SubjectsContesting.Name] = TeamConfig.teams.Subjects.Team
 }
+
+TerminalConfig.teamsOnTerminalStateToCapturingMsgMap = {
+	[TerminalConfig.teamsOnTerminalStates.NumberOfTeamsOnTerminal.Name] = "Terminal contested",
+	[TerminalConfig.teamsOnTerminalStates.NoTeamsOnTerminal.Name] = "Terminal uncontested",
+	[TerminalConfig.teamsOnTerminalStates[TeamConfig.teams.Guards.Name].Name] = "Guards capturing terminal",
+	[TerminalConfig.teamsOnTerminalStates[TeamConfig.teams.Subjects.Name].Name] = "Subjects capturing terminal"
+}
+
 
 TerminalConfig.teamsOnTerminalStateToTeamsMap = {
 	[TeamConfig.teams.Guards.Name] = TeamConfig.teams.Guards.Team,
@@ -73,6 +86,6 @@ TerminalConfig.terminalContestTimeStates = {
 }
 
 
-TerminalConfig.TIME_TO_CAPTURE = 6
+TerminalConfig.TIME_TO_CAPTURE = 2
 
 return TerminalConfig

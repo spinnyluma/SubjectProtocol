@@ -3,12 +3,22 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 
+local NamedSignal = require(ReplicatedStorage.Modules.Utilities.NamedSignal)
+
+
 local ProximitySignals = require(ServerStorage.Modules.ECS.Systems.ProximityInteractionSystem.Signals)
 local ProximityConfig = require(ServerStorage.Modules.ECS.Systems.ProximityInteractionSystem.Config)
 
 local TeamConfig = require(ReplicatedStorage.Modules.Shared.Constants.TeamConfig)
 local AssertHelper = require(ReplicatedStorage.Modules.Helpers.Debug.AssertHelper)
 local TerminalConfig = require(ReplicatedStorage.Modules.Shared.Constants.TerminalConfig)
+local ReplicaConfig = require(ReplicatedStorage.Modules.Shared.Constants.ReplicaConfig)
+
+local SystemManagerModule = require(ReplicatedStorage.Modules.ECS.SystemManagerModule)
+local TerminalSignals = require(script.Signals)
+
+local Replica = require(ServerStorage.Modules.Utilities.ReplicaServer)
+
 
 local TerminalControlSystem = {}
 
@@ -16,9 +26,24 @@ local currentTerminalContestState = TerminalConfig.terminalContestStates.Unconte
 local terminalOwner: Team = TeamConfig.teams.Guards.Team
 
 
+local currentModeCooldownTime = 0
+local voteOccurredForCurrentSubjectCapture = false
+
 local currentTerminalContestTime = 0
 local contestingConnection: RBXScriptConnection? = nil
 
+
+local cooldownDecrementConnection: RBXScriptConnection? = nil
+
+local terminalReplica = Replica.New({
+	Token = Replica.Token(ReplicaConfig.replicaTokens.Terminal.Name),
+	Data = {
+		TerminalTime = currentTerminalContestTime,
+		TerminalOwner = TeamConfig.teams.Guards.Team,
+		TerminalContestState = TerminalConfig.terminalContestStates.Uncontested.Name,
+		TeamsOnTerminalState = TerminalConfig.teamsOnTerminalStates.NoTeamsOnTerminal.Name
+	}
+})
 
 local function GetTeamsOnTerminalStateFromPlayers(playerCharacters: {Model?}): TerminalConfig.TeamsOnTerminalState?
 	local playerCharactersIsValid = AssertHelper.InvalidArgAssert(
@@ -71,6 +96,7 @@ end
 ]]
 local function SetTerminalContestTime(newContestTime: number): boolean?
 	currentTerminalContestTime = newContestTime
+	terminalReplica:Set({"TerminalTime"}, currentTerminalContestTime)
 	if(currentTerminalContestTime >= TerminalConfig.TIME_TO_CAPTURE) then
 		return TerminalConfig.terminalContestTimeStates.TerminalTimeMaxReached.Name
 	end 
@@ -78,14 +104,88 @@ local function SetTerminalContestTime(newContestTime: number): boolean?
 	if(currentTerminalContestTime <= 0) then
 		return TerminalConfig.terminalContestTimeStates.TerminalTimeMinReached.Name
 	end
-	print(currentTerminalContestTime)
 	return nil
 end
 
-local function ResetTerminalState()
-	currentTerminalContestTime = 0
-	currentTerminalContestState = TerminalConfig.terminalContestStates.Uncontested.Name
+
+local function SetTerminalContestState(newContestState: TerminalConfig.TerminalContestState)
+	local newContestStateIsValid = AssertHelper.InvalidArgAssert(
+		TerminalConfig.terminalContestStates[newContestState] ~= nil,
+		newContestState,
+		"newContestState",
+		"SetTerminalContestState",
+		"TerminalContestState"
+	)
+	if(not newContestStateIsValid) then return end
+	
+	currentTerminalContestState = newContestState
+
+	terminalReplica:Set({"TerminalContestState"}, currentTerminalContestState)
+		
 end
+
+local function SetTeamsOnTerminalState(newTeamsOnTerminalState: TerminalConfig.TeamsOnTerminalState)
+	local newTeamsOnTerminalStateIsValid = AssertHelper.InvalidArgAssert(
+		TerminalConfig.teamsOnTerminalStates[newTeamsOnTerminalState] ~= nil,
+		newTeamsOnTerminalState,
+		"newTeamOnTerminalState",
+		"SetTeamsOnTerminalState",
+		"TeamsOnTerminalState"
+	)
+	if(not newTeamsOnTerminalStateIsValid) then return end
+	terminalReplica:Set({"TeamsOnTerminalState"}, newTeamsOnTerminalState)
+end
+
+local function SetTerminalOwner(newTerminalOwner: Team)
+	local newTerminalOwnerIsValid = AssertHelper.InvalidArgAssert(
+		typeof(newTerminalOwner) == "Instance"
+		and newTerminalOwner:IsA("Team"),
+		newTerminalOwner,
+		"terminalOwner",
+		"SetTerminalOwner",
+		"Team"
+	)
+	if(not newTerminalOwnerIsValid) then return end
+	
+	local oldTerminalOwner = terminalOwner
+	terminalOwner = newTerminalOwner
+	
+	if(oldTerminalOwner ~= terminalOwner) then
+		voteOccurredForCurrentSubjectCapture = false
+		TerminalSignals.TerminalOwnerChanged:Fire(terminalOwner, oldTerminalOwner)
+	end
+	terminalReplica:Set({"TerminalOwner"}, newTerminalOwner)
+	
+	if(voteOccurredForCurrentSubjectCapture) then return end
+	if(terminalOwner == TeamConfig.teams.Subjects.Team) then
+		if(currentModeCooldownTime == 0) then
+			TerminalSignals.ModeVoteAvailable:Fire()
+			voteOccurredForCurrentSubjectCapture = true
+			currentModeCooldownTime = TerminalConfig.TIME_TO_CAPTURE
+			
+			cooldownDecrementConnection = RunService.Heartbeat:Connect(function(deltaTime: number)
+				currentModeCooldownTime -= deltaTime
+				if(currentModeCooldownTime <= 0) then
+					cooldownDecrementConnection:Disconnect()
+					if(not voteOccurredForCurrentSubjectCapture) then
+						currentModeCooldownTime = 0
+						TerminalConfig.ModeVoteAvailable:Fire()
+					end
+				end
+			end)
+		end
+	else
+		
+	end
+end
+
+
+local function ResetTerminalState()
+	SetTerminalContestTime(0)
+	SetTerminalContestState(TerminalConfig.terminalContestStates.Uncontested.Name)
+end
+
+
 
 local function AddTerminalContestStateThread(newContestingTeam: Team)
 	local newContestingTeamIsValid = AssertHelper.InvalidArgAssert(
@@ -97,7 +197,6 @@ local function AddTerminalContestStateThread(newContestingTeam: Team)
 		"Team"
 	)
 	if(not newContestingTeamIsValid) then return end
-	
 	
 	if(currentTerminalContestState == TerminalConfig.terminalContestStates.Uncontested.Name
 		and terminalOwner ~= newContestingTeam) then
@@ -111,8 +210,7 @@ local function AddTerminalContestStateThread(newContestingTeam: Team)
 		if(not contestStateIsValid) then return end
 		
 		
-		
-		currentTerminalContestState = contestState
+		SetTerminalContestState(contestState)
 		
 		contestingConnection = RunService.Heartbeat:Connect(function(deltaTime: number)
 			local contestTimeState: boolean? = SetTerminalContestTime(
@@ -122,7 +220,7 @@ local function AddTerminalContestStateThread(newContestingTeam: Team)
 			if(contestTimeState ~= TerminalConfig.terminalContestTimeStates.TerminalTimeMaxReached.Name) then
 				return
 			end
-			terminalOwner = newContestingTeam
+			SetTerminalOwner(newContestingTeam)
 
 			ResetTerminalState()
 			contestingConnection:Disconnect()				
@@ -130,6 +228,7 @@ local function AddTerminalContestStateThread(newContestingTeam: Team)
 	else
 		
 		local currentContestingTeam: {[string]: any}? = TerminalConfig.contestStateToTeamsMap[currentTerminalContestState]
+		
 		local currentContestingTeamIsValid = AssertHelper.ExpectedValAssert(
 			typeof(currentContestingTeam) == "Instance"
 			and currentContestingTeam:IsA("Team"),
@@ -157,7 +256,7 @@ local function AddTerminalContestStateThread(newContestingTeam: Team)
 				if(contestTimeState ~= TerminalConfig.terminalContestTimeStates.TerminalTimeMaxReached.Name) then
 					return
 				end
-				terminalOwner = newContestingTeam
+				SetTerminalOwner(newContestingTeam)
 	
 				ResetTerminalState()
 				if(contestingConnection ~= nil
@@ -186,19 +285,18 @@ local function AddTerminalContestStateThread(newContestingTeam: Team)
 					and contestingConnection.Connected) then
 					contestingConnection:Disconnect()
 				end
-				print("min raeched!!")
-				currentTerminalContestTime = 0
+				SetTerminalContestTime(0)
 				
-				if(terminalOwner == newContestingTeam) then 
-					print("uncontested now!!!")
-					currentTerminalContestState = TerminalConfig.terminalContestStates.Uncontested.Name
+				if(terminalOwner == newContestingTeam) then
+					SetTerminalContestState(TerminalConfig.terminalContestStates.Uncontested.Name)
+					SetTeamsOnTerminalState(TerminalConfig.teamsOnTerminalStates.NoTeamsOnTerminal.Name)
 					return
 				else
 					--[[
 						Increase the contest time only when there is another team (3rd team) that has captured the terminal
 						because after the current terminal contest time reaches 0 after decrementing, the 3rd team may not be the terminal owner
 					]]
-					currentTerminalContestState = newContestingTeamContestState
+					SetTerminalContestState(newContestingTeamContestState)
 					contestingConnection = RunService.Heartbeat:Connect(function(increaseDeltaTime: number)
 						local contestTimeState: boolean? = SetTerminalContestTime(
 							currentTerminalContestTime + increaseDeltaTime
@@ -206,7 +304,7 @@ local function AddTerminalContestStateThread(newContestingTeam: Team)
 						if(contestTimeState ~= TerminalConfig.terminalContestTimeStates.TerminalTimeMaxReached.Name) then
 							return
 						end
-						terminalOwner = newContestingTeam
+						SetTerminalOwner(newContestingTeam)
 
 						ResetTerminalState()
 						if(contestingConnection ~= nil
@@ -218,15 +316,6 @@ local function AddTerminalContestStateThread(newContestingTeam: Team)
 			end)
 		end
 	end
-	--local currentContestingTeam: {[string]: any}? = TerminalConfig.contestStateToTeamsMap[currentTerminalContestState]
-	--local currentContestingTeamIsValid = AssertHelper.ExpectedValAssert(
-	--	type(currentContestingTeam) == "table",
-	--	currentContestingTeam,
-	--	"currentContestingTeam",
-	--	"table"
-	--)
-	--if(not currentContestingTeamIsValid) then return end
-	
 end
 
 
@@ -261,34 +350,60 @@ local function HandleTerminalControlSystem(proximityInteractionType: string,
 		"instancesFound"
 	)
 	if(not instancesFoundIsValid) then return end
-	local terminalContestState = GetTeamsOnTerminalStateFromPlayers(instancesFound)
-	if(not terminalContestState) then return end
-	if(terminalContestState == TerminalConfig.teamsOnTerminalStates.NumberOfTeamsOnTerminal.Name
-		or terminalContestState == TerminalConfig.teamsOnTerminalStates.NoTeamsOnTerminal.Name) then
+	local teamsOnTerminalState = GetTeamsOnTerminalStateFromPlayers(instancesFound)
+	if(not teamsOnTerminalState) then return end
+	
+	local terminalOwnerIsValid = AssertHelper.ExpectedValAssert(
+		typeof(terminalOwner) == "Instance"
+		and terminalOwner:IsA("Team"),
+		terminalOwner,
+		"terminalOwner",
+		"Team"
+	)
+	if(not terminalOwnerIsValid) then return end
+	
+	
+	local team: Team? = TerminalConfig.teamsOnTerminalStateToTeamsMap[teamsOnTerminalState]
+	if(team
+		and terminalOwner == team
+		and currentTerminalContestState == TerminalConfig.terminalContestStates.Uncontested.Name) then
+		SetTeamsOnTerminalState(TerminalConfig.teamsOnTerminalStates.NoTeamsOnTerminal.Name)
+	else
+		SetTeamsOnTerminalState(teamsOnTerminalState)
+
+	end
+	
+	if(teamsOnTerminalState == TerminalConfig.teamsOnTerminalStates.NumberOfTeamsOnTerminal.Name
+		or teamsOnTerminalState == TerminalConfig.teamsOnTerminalStates.NoTeamsOnTerminal.Name) then
 		if(typeof(contestingConnection) ~= "RBXScriptConnection") then return end
 		contestingConnection:Disconnect()
 		return
 	end
-	local teamFromControlType: Team? = TerminalConfig.teamsOnTerminalStateToTeamsMap[terminalContestState]
+	local teamFromControlType: Team? = TerminalConfig.teamsOnTerminalStateToTeamsMap[teamsOnTerminalState]
 	if(not teamFromControlType) then return end
 	if(teamFromControlType == terminalOwner
-		and terminalContestState == TerminalConfig.teamsOnTerminalStates.NoTeamsOnTerminal.Name) then
+		and teamsOnTerminalState == TerminalConfig.teamsOnTerminalStates.NoTeamsOnTerminal.Name) then
 		return
 	end
 	if(teamFromControlType == terminalOwner
-		and currentTerminalContestState == TerminalConfig.terminalContestStates.Uncontested.Name) then return end
+		and currentTerminalContestState == TerminalConfig.terminalContestStates.Uncontested.Name) then 
+		return 
+	end
 	--[[
 		If there is a contesting team
 		then we might not want to add a new contest state thread
 		because it may already have been initialized.
 	]]
 	if(contestingConnection ~= nil
-		and contestingConnection.Connected) then return end
+		and contestingConnection.Connected) then 
+		return 
+	end
 	
 	AddTerminalContestStateThread(teamFromControlType)
 end
 
 function TerminalControlSystem.Initialize()
+	
 	ProximitySignals.ProximityObjectsFound:Connect(function(proximityInteractionType: string,
 		querySource: Instance,
 		instancesFound: {Instance?}
@@ -297,6 +412,8 @@ function TerminalControlSystem.Initialize()
 			HandleTerminalControlSystem(proximityInteractionType, querySource, instancesFound)
 		end
 	end)
+	
+	terminalReplica:Replicate()
 end
 
 return TerminalControlSystem

@@ -179,13 +179,15 @@ end
 ]]
 function AssertHelper.Warn(message: string)
 	local messageIsValid: boolean? = AssertHelper.Assert(
-		`Invalid arguemnt to AssertHelper.Warn. string expected for message, got {message}`,
+		`Invalid argument to AssertHelper.Warn. string expected for message, got {message}`,
 		type(message) == "string"
 	)
 	if(not messageIsValid) then
 		return
 	end
-	warn(debug.traceback(message, 2))
+	LogService:Warn(message, {
+		traceback = debug.traceback(nil, 2)
+	})
 end
 
 return AssertHelper
