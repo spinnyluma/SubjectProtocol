@@ -13,6 +13,7 @@ local TeamConfig = require(ReplicatedStorage.Modules.Shared.Constants.TeamConfig
 local AssertHelper = require(ReplicatedStorage.Modules.Helpers.Debug.AssertHelper)
 local TerminalConfig = require(ReplicatedStorage.Modules.Shared.Constants.TerminalConfig)
 local ReplicaConfig = require(ReplicatedStorage.Modules.Shared.Constants.ReplicaConfig)
+local FacilityModeConfig = require(ServerStorage.Modules.ECS.Systems.FacilityModeSystem.Config)
 
 local SystemManagerModule = require(ReplicatedStorage.Modules.ECS.SystemManagerModule)
 local TerminalSignals = require(script.Signals)
@@ -161,10 +162,11 @@ local function SetTerminalOwner(newTerminalOwner: Team)
 		if(currentModeCooldownTime == 0) then
 			TerminalSignals.ModeVoteAvailable:Fire()
 			voteOccurredForCurrentSubjectCapture = true
-			currentModeCooldownTime = TerminalConfig.TIME_TO_CAPTURE
+			currentModeCooldownTime = 2
 			
 			cooldownDecrementConnection = RunService.Heartbeat:Connect(function(deltaTime: number)
 				currentModeCooldownTime -= deltaTime
+				print("new cooldown time is ", currentModeCooldownTime)
 				if(currentModeCooldownTime <= 0) then
 					cooldownDecrementConnection:Disconnect()
 					if(not voteOccurredForCurrentSubjectCapture) then

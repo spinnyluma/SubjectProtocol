@@ -8,6 +8,8 @@ local TerminalSignals = require(ServerStorage.Modules.ECS.Systems.TerminalContro
 local TeamConfig = require(ReplicatedStorage.Modules.Shared.Constants.TeamConfig)
 local ReplicaConfig = require(ReplicatedStorage.Modules.Shared.Constants.ReplicaConfig)
 local ModeConfig = require(ReplicatedStorage.Modules.Shared.Constants.ModeConfig)
+local FacilityModeConfig = require(script.Config)
+
 
 local Replica = require(ServerStorage.Modules.Utilities.ReplicaServer)
 local AssertHelper = require(ReplicatedStorage.Modules.Helpers.Debug.AssertHelper)
@@ -15,17 +17,20 @@ local AssertHelper = require(ReplicatedStorage.Modules.Helpers.Debug.AssertHelpe
 
 local teamPlayerAddedConnection: RBXScriptConnection? = nil
 
+local submitModeVoteRE: RemoteEvent = ReplicatedStorage.Assets.Shared.Remotes.Events.SubmitModeVote
+
 local subjectsTeam = Teams:FindFirstChild("Subjects")
 
 local modeReplica = Replica.New({
 	Token = Replica.Token(ReplicaConfig.replicaTokens.Mode.Name),
 	Data = {
-		VoteStarted = false,
+		VoteOngoing = false,
 		Modes = {}
 	}
 })
 
-local currentVoteCountdown = 
+local currentVoteCountdown = FacilityModeConfig.MODE_VOTE_TIME
+local voteOngoing = false
 
 local FacilityModeSystem = {}
 
@@ -88,7 +93,6 @@ local function ReplicateReplicaToSubjects()
 	
 	local subjectsPlayers = subjectsTeam:GetPlayers()
 	
-	print(modeReplica)
 	for _, player in subjectsPlayers do
 		modeReplica:Subscribe(player)
 	end
@@ -118,8 +122,23 @@ local function ResetModeReplica()
 	modeReplica:Set({"Modes"}, {})
 end
 
+local function ProcessVote(votedMode: ModeConfig.Mode)
+	local votedModeIsValid = AssertHelper.InvalidArgAssert(
+		ModeConfig.modes[votedMode] ~= nil,
+		votedMode,
+		"votedMode",
+		"ProcessVote",
+		"ModeConfig.Mode"
+	)
+	if(not votedModeIsValid) then return end
+end
+
 function FacilityModeSystem.Initialize()
+	submitModeVoteRE.OnServerEvent:Connect(function(player: Player, votedMode: ModeConfig.Mode)
+		if(not voteOngoing) then return end
+	end)
 	TerminalSignals.ModeVoteAvailable:Connect(function()
+		print("reached hereeee")
 		local modes = GetRandomModes(ModeConfig.NUMBER_OF_MODES)
 		local modesIsValid = AssertHelper.ExpectedValAssert(
 			type(modes) == "table",
