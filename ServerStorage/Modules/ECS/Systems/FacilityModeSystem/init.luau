@@ -11,11 +11,16 @@ local ModeConfig = require(ReplicatedStorage.Modules.Shared.Constants.ModeConfig
 local FacilityModeConfig = require(script.Config)
 
 
+local Trove = require(ReplicatedStorage.Modules.Utilities.Trove)
 local Replica = require(ServerStorage.Modules.Utilities.ReplicaServer)
-local AssertHelper = require(ReplicatedStorage.Modules.Helpers.Debug.AssertHelper)
+local Promise = require(ReplicatedStorage.Modules.Utilities.Promise)
 
+local AssertHelper = require(ReplicatedStorage.Modules.Helpers.Debug.AssertHelper)
+local TimeHelper = require(ReplicatedStorage.Modules.Helpers.Time.TimeHelper)
 
 local teamPlayerAddedConnection: RBXScriptConnection? = nil
+local facilityModeSelectionTrove: Trove.Trove = Trove.new()
+
 
 local submitModeVoteRE: RemoteEvent = ReplicatedStorage.Assets.Shared.Remotes.Events.SubmitModeVote
 
@@ -29,8 +34,9 @@ local modeReplica = Replica.New({
 	}
 })
 
-local currentVoteCountdown = FacilityModeConfig.MODE_VOTE_TIME
 local voteOngoing = false
+
+local currentVotes: {[Player]: ModeConfig.Mode?} = {}
 
 local FacilityModeSystem = {}
 
@@ -96,6 +102,24 @@ local function ReplicateReplicaToSubjects()
 	for _, player in subjectsPlayers do
 		modeReplica:Subscribe(player)
 	end
+	
+	
+	Replica.NewReadyPlayer:Connect(function(player: Player)
+		if(player.Team == subjectsTeam) then
+			modeReplica:Subscribe(player)
+		end
+	end)
+	subjectsTeam.PlayerAdded:Connect(function(player: Player)
+		if(Replica.ReadyPlayers[player]) then
+			modeReplica:Subscribe(player)
+		end
+	end)
+	
+	subjectsTeam.PlayerRemoved:Connect(function(player: Player)
+		if(Replica.ReadyPlayers[player]) then
+			modeReplica:Unsubscribe(player)
+		end
+	end)
 end
 
 --[[
@@ -117,10 +141,7 @@ local function AddModesToReplica(modes: {ModeConfig.Mode?}?): boolean?
 	return true
 end
 
-local function ResetModeReplica()
-	modeReplica:Set({"VoteStarted"}, false)
-	modeReplica:Set({"Modes"}, {})
-end
+
 
 local function ProcessVote(votedMode: ModeConfig.Mode)
 	local votedModeIsValid = AssertHelper.InvalidArgAssert(
@@ -133,12 +154,107 @@ local function ProcessVote(votedMode: ModeConfig.Mode)
 	if(not votedModeIsValid) then return end
 end
 
+
+--[[
+	Checks whether a mode vote exists for a certain player.
+	
+	@param player Player The player to check for.
+	@returns boolean? Whether the mode vote exists for the player. If the value returned is true, the vote may already exist for the player
+	or an error occurred when calling the function.
+]]
+local function ModeVoteExistsForPlayer(player: Player): boolean
+	local playerIsValid = AssertHelper.InvalidArgAssert(
+		typeof(player) == "Instance"
+		and player:IsA("Player"),
+		player,
+		"player",
+		"VoteExists",
+		"Player"
+	)
+	if(not playerIsValid) then return true end
+	
+	return currentVotes[player] ~= nil
+end
+
+local function CompileModeVotes(): {[ModeConfig.Mode]: number?}
+	local compiledModeVotes: {[ModeConfig.Mode]: number?} = {}
+	for _, mode in currentVotes do
+		if(not compiledModeVotes[mode]) then
+			compiledModeVotes[mode] = 1
+		else
+			compiledModeVotes[mode] += 1
+		end
+	end
+	return compiledModeVotes
+end
+
+local function ResetModeVote()
+	voteOngoing = false
+	table.clear(currentVotes)
+
+	modeReplica:Set({"VoteOngoing"}, false)
+	modeReplica:Set({"Modes"}, {})
+end
+
+local function InitializeModeVoteProcess()
+	Promise.try(function()
+		local voteEndTime = workspace:GetServerTimeNow() + FacilityModeConfig.MODE_VOTE_TIME
+		modeReplica:Set({"VoteEndTime"}, voteEndTime)
+		local countdownEndedSuccess = TimeHelper.CreateCountdownInSeconds(FacilityModeConfig.MODE_VOTE_TIME)
+		if(not countdownEndedSuccess) then
+			return Promise.reject()
+		end
+		
+	end)
+		:andThen(function()
+			local compiledVotes: {[ModeConfig.Mode]: number?} = CompileModeVotes()
+			print(compiledVotes)
+			
+			ResetModeVote()
+		end)
+		:catch(function(error)
+			AssertHelper.Warn(tostring(error))
+		end)
+end
+
+local function AddVoteToCurrentVotes(player: Player, votedMode: ModeConfig.Mode)
+	local playerIsValid = AssertHelper.InvalidArgAssert(
+		typeof(player) == "Instance"
+		and player:IsA("Player"),
+		player,
+		"player",
+		"AddVoteToCurrentVotes",
+		"Player"
+	)
+	if(not playerIsValid) then return end
+	
+	local votedModeIsValid = AssertHelper.InvalidArgAssert(
+		ModeConfig.modes[votedMode] ~= nil,
+		votedMode,
+		"votedMode",
+		"AddVoteToCurrentVotes",
+		"ModeConfig.Mode"
+	)
+	if(not votedModeIsValid) then return end
+	
+	currentVotes[player] = votedMode
+end
+
 function FacilityModeSystem.Initialize()
+	ReplicateReplicaToSubjects()
 	submitModeVoteRE.OnServerEvent:Connect(function(player: Player, votedMode: ModeConfig.Mode)
 		if(not voteOngoing) then return end
+		local modeVoteExistsForPlayer: boolean = ModeVoteExistsForPlayer(player)
+		if(modeVoteExistsForPlayer) then
+			return
+		end
+		
+		local votedModeExists: boolean = ModeConfig.modes[votedMode] ~= nil
+		if(not votedModeExists) then return end
+		
+		AddVoteToCurrentVotes(player, votedMode)
 	end)
 	TerminalSignals.ModeVoteAvailable:Connect(function()
-		print("reached hereeee")
 		local modes = GetRandomModes(ModeConfig.NUMBER_OF_MODES)
 		local modesIsValid = AssertHelper.ExpectedValAssert(
 			type(modes) == "table",
@@ -149,18 +265,14 @@ function FacilityModeSystem.Initialize()
 		if(not modesIsValid) then return end
 		local success: boolean? = AddModesToReplica(modes)
 		if(not success) then return end
-
-		modeReplica:Set({"VoteStarted"}, true)
+		print("vote  ongoing changed")
+		modeReplica:Set({"VoteOngoing"}, true)
+		voteOngoing = true
 		ReplicateReplicaToSubjects()
+		InitializeModeVoteProcess()
+
 	end)
-	TerminalSignals.TerminalOwnerChanged:Connect(function(newTerminalOwner: Team, _)
-		if(newTerminalOwner == TeamConfig.teams.Subjects.Team) then
-			
-		else
-			ResetModeReplica()
-			modeReplica:DontReplicate()
-		end		
-	end)
+	
 end
 
 return FacilityModeSystem

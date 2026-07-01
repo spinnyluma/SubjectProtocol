@@ -166,7 +166,6 @@ local function SetTerminalOwner(newTerminalOwner: Team)
 			
 			cooldownDecrementConnection = RunService.Heartbeat:Connect(function(deltaTime: number)
 				currentModeCooldownTime -= deltaTime
-				print("new cooldown time is ", currentModeCooldownTime)
 				if(currentModeCooldownTime <= 0) then
 					cooldownDecrementConnection:Disconnect()
 					if(not voteOccurredForCurrentSubjectCapture) then

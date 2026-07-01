@@ -16,6 +16,7 @@ local modeSelectionButtons: Frame? = nil
 
 local selectionButton: ImageButton = ReplicatedStorage.Assets.UI.Templates.SelectionButton
 
+local submitModeVote: RemoteEvent = ReplicatedStorage.Assets.Shared.Remotes.Events.SubmitModeVote
 local FacilityModeUiSystem = {}
 
 local function SetFacilityModeSelectionVisibility(isVisible: boolean)
@@ -143,7 +144,7 @@ local function InitializeSelectionButtons(modes: {ModeConfig.Mode?})
 		local setup: boolean = SetupSelectionButton(clonedSelectionButton, mode)
 		if(not setup) then continue end
 		clonedSelectionButton.Activated:Connect(function(inputObject: InputObject, _)
-			print("clicked!!!!")
+			submitModeVote:FireServer(mode)
 		end)
 		clonedSelectionButton.Parent = modeSelectionButtons
 	end
@@ -152,16 +153,17 @@ end
 function FacilityModeUiSystem.Initialize()
 	InitializeUiElements()
 	Replica.OnNew(ReplicaConfig.replicaTokens.Mode.Name, function(replica: Replica.Replica)
+
 		local data = replica.Data
-		
-		local voteStarted: boolean? = data.VoteStarted
-		local voteStartedIsValid = AssertHelper.ExpectedValAssert(
-			type(voteStarted) == "boolean",
-			voteStarted,
+
+		local voteOngoing: boolean? = data.VoteOngoing
+		local voteOngoingIsValid = AssertHelper.ExpectedValAssert(
+			type(voteOngoing) == "boolean",
+			voteOngoing,
 			"voteStarted",
 			"boolean"
 		)
-		if(not voteStartedIsValid) then return end
+		if(not voteOngoingIsValid) then return end
 		
 		local modes: {ModeConfig.Mode?}? = data.Modes
 		local modesIsValid = AssertHelper.ExpectedValAssert(
@@ -171,18 +173,19 @@ function FacilityModeUiSystem.Initialize()
 			"table"
 		)
 		if(not modesIsValid) then return end
-		
-		if(voteStarted) then
+		if(voteOngoing) then
 			InitializeSelectionButtons(modes)
 			SetFacilityModeSelectionVisibility(true)
 		else
 			SetFacilityModeSelectionVisibility(false)
 		end
-		replica:OnSet({"VoteStarted"}, function(newValue: boolean, oldValue: boolean)
-			if(voteStarted) then
+		replica:OnSet({"VoteOngoing"}, function(newValue: boolean, oldValue: boolean)
+			print(newValue)
+			if(newValue) then
 				InitializeSelectionButtons(modes)
 				SetFacilityModeSelectionVisibility(true)
 			else
+				print("went ehre")
 				SetFacilityModeSelectionVisibility(false)
 			end
 		end)
