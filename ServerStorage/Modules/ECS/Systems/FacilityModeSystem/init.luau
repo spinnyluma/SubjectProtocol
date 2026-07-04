@@ -8,7 +8,8 @@ local TerminalSignals = require(ServerStorage.Modules.ECS.Systems.TerminalContro
 local TeamConfig = require(ReplicatedStorage.Modules.Shared.Constants.TeamConfig)
 local ReplicaConfig = require(ReplicatedStorage.Modules.Shared.Constants.ReplicaConfig)
 local ModeConfig = require(ReplicatedStorage.Modules.Shared.Constants.ModeConfig)
-local FacilityModeConfig = require(script.Config)
+
+local FacilityModeSignals = require(script.Signals)
 
 
 local Trove = require(ReplicatedStorage.Modules.Utilities.Trove)
@@ -17,9 +18,15 @@ local Promise = require(ReplicatedStorage.Modules.Utilities.Promise)
 
 local AssertHelper = require(ReplicatedStorage.Modules.Helpers.Debug.AssertHelper)
 local TimeHelper = require(ReplicatedStorage.Modules.Helpers.Time.TimeHelper)
+local DictionaryHelper = require(ReplicatedStorage.Modules.Helpers.Table.DictionaryHelper)
+local TableHelper = require(ReplicatedStorage.Modules.Helpers.Table.TableHelper)
+
+local SystemManagerModule = require(ReplicatedStorage.Modules.ECS.SystemManagerModule)
 
 local teamPlayerAddedConnection: RBXScriptConnection? = nil
 local facilityModeSelectionTrove: Trove.Trove = Trove.new()
+
+local currentMode: ModeConfig.Mode? = ModeConfig.modes.Idle.Name
 
 
 local submitModeVoteRE: RemoteEvent = ReplicatedStorage.Assets.Shared.Remotes.Events.SubmitModeVote
@@ -35,7 +42,7 @@ local modeReplica = Replica.New({
 })
 
 local voteOngoing = false
-
+local currentRandomModes: {ModeConfig.Mode?} = {}
 local currentVotes: {[Player]: ModeConfig.Mode?} = {}
 
 local FacilityModeSystem = {}
@@ -54,6 +61,7 @@ local function GetRandomModes(numberOfModes: number): {ModeConfig.Mode?}?
 	local keys = {}
 
 	for key, _ in ModeConfig.modes do
+		if(key == ModeConfig.modes.Idle.Name) then continue end
 		table.insert(keys, key)
 	end
 
@@ -82,6 +90,7 @@ local function GetRandomModes(numberOfModes: number): {ModeConfig.Mode?}?
 		if(not modeNameIsValid) then continue end
 		
 		table.insert(modes, modeName)
+		table.remove(keys, rndmIndex)
 	end
 	return modes
 end
@@ -122,24 +131,7 @@ local function ReplicateReplicaToSubjects()
 	end)
 end
 
---[[
-	Sets the Modes' value in the modeReplica.
-	@param modes {[string]: number | string} The modes to add to the replica.
-	@returns boolean? Returns a boolean telling whether the operation was successful.
-]]
-local function AddModesToReplica(modes: {ModeConfig.Mode?}?): boolean?
-	local modesIsValid = AssertHelper.InvalidArgAssert(
-		type(modes) == "table",
-		modes,
-		"modes",
-		"AddModesToReplica",
-		"table"
-	)
-	if(not modesIsValid) then return end
-	
-	modeReplica:Set({"Modes"}, modes)
-	return true
-end
+
 
 
 
@@ -191,29 +183,97 @@ end
 local function ResetModeVote()
 	voteOngoing = false
 	table.clear(currentVotes)
+	table.clear(currentRandomModes)
+	modeReplica:SetValues({}, {
+		VoteOngoing = false,
+		Modes = {},
+		VoteEndTime = 0,
+	})
+end
 
-	modeReplica:Set({"VoteOngoing"}, false)
-	modeReplica:Set({"Modes"}, {})
+local function GetSelectedMode(compiledVotes: {[ModeConfig.Mode]: number?}): ModeConfig.Mode?
+	local compiledVotesIsValid = AssertHelper.InvalidArgAssert(
+		type(compiledVotes) == "table",
+		compiledVotes,
+		"compiledVotes",
+		"SelectMode",
+		"table"
+	)
+	if(not compiledVotesIsValid) then return nil end
+	
+	local lenOfDict: number? = DictionaryHelper.GetLengthOfDictionary(compiledVotes)
+	if(not lenOfDict) then
+		return nil
+	end
+	
+	
+	local modeWithMaxVotes: ModeConfig.Mode? = nil
+	local maxVotes: number? = nil
+	for mode, count in compiledVotes do
+		if(not modeWithMaxVotes
+			or count > maxVotes) then
+			modeWithMaxVotes = mode
+			maxVotes = count
+		end
+	end
+	
+	return modeWithMaxVotes
+end
+
+local function SetSelectedMode(mode: ModeConfig.Mode)
+	local modeIsValid = AssertHelper.InvalidArgAssert(
+		ModeConfig.modes[mode] ~= nil,
+		mode,
+		"mode",
+		"SetSelectedMode",
+		"ModeConfig.Mode"
+	)
+	if(not modeIsValid) then return end
+	local oldMode: ModeConfig.Mode? = currentMode
+	
+	currentMode = mode
+	if(oldMode ~= currentMode) then
+		FacilityModeSignals.ModeChanged:Fire(currentMode, oldMode)
+	end
 end
 
 local function InitializeModeVoteProcess()
 	Promise.try(function()
-		local voteEndTime = workspace:GetServerTimeNow() + FacilityModeConfig.MODE_VOTE_TIME
-		modeReplica:Set({"VoteEndTime"}, voteEndTime)
-		local countdownEndedSuccess = TimeHelper.CreateCountdownInSeconds(FacilityModeConfig.MODE_VOTE_TIME)
+		local countdownEndedSuccess = TimeHelper.CreateCountdownInSeconds(ModeConfig.MODE_VOTE_TIME)
 		if(not countdownEndedSuccess) then
-			return Promise.reject()
+			return Promise.reject("Mode vote countdown could not be started properly")
 		end
 		
 	end)
 		:andThen(function()
 			local compiledVotes: {[ModeConfig.Mode]: number?} = CompileModeVotes()
-			print(compiledVotes)
+			local lenOfDict: number? = DictionaryHelper.GetLengthOfDictionary(compiledVotes)
+			if(not lenOfDict) then
+				return Promise.reject(`Unable to obtain the number of compiled votes, expected number, got {lenOfDict}`)
+			end
+			if(lenOfDict == 0) then
+				local randomMode: ModeConfig.Mode? = TableHelper.GetRandomValueFromTable(currentRandomModes)
+				if(not randomMode) then
+					return Promise.reject(`Unable to obtain random mode from selection of modes, expected ModeConfig.Mode, got {randomMode}`)
+				end
+				SetSelectedMode(randomMode)
+				return Promise.resolve()
+			else
+				local selectedMode: ModeConfig.Mode? = GetSelectedMode(compiledVotes)
+				if(not selectedMode) then
+					return Promise.reject(`Unable to select a mode from compiled votes, expected ModeConfig.Mode, got {selectedMode}`)
+				end
+				SetSelectedMode(selectedMode)
+				return Promise.resolve()
+
+			end
 			
-			ResetModeVote()
 		end)
 		:catch(function(error)
 			AssertHelper.Warn(tostring(error))
+		end)
+		:finally(function()
+			ResetModeVote()
 		end)
 end
 
@@ -241,6 +301,7 @@ local function AddVoteToCurrentVotes(player: Player, votedMode: ModeConfig.Mode)
 end
 
 function FacilityModeSystem.Initialize()
+	SystemManagerModule.SetGlobalGameState("CurrentMode", currentMode)
 	ReplicateReplicaToSubjects()
 	submitModeVoteRE.OnServerEvent:Connect(function(player: Player, votedMode: ModeConfig.Mode)
 		if(not voteOngoing) then return end
@@ -263,10 +324,14 @@ function FacilityModeSystem.Initialize()
 			"table"
 		)
 		if(not modesIsValid) then return end
-		local success: boolean? = AddModesToReplica(modes)
-		if(not success) then return end
-		print("vote  ongoing changed")
-		modeReplica:Set({"VoteOngoing"}, true)
+		
+		currentRandomModes = modes
+		local voteEndTime = workspace:GetServerTimeNow() + ModeConfig.MODE_VOTE_TIME
+		modeReplica:SetValues({}, {
+			VoteOngoing = true,
+			Modes = modes,
+			VoteEndTime = voteEndTime
+		})
 		voteOngoing = true
 		ReplicateReplicaToSubjects()
 		InitializeModeVoteProcess()

@@ -15,6 +15,9 @@ local overlapParamsPresets = {
 local raycastParamsPresets = {
 	T_Turret = {
 		ExcludeInstances = {"Self"}
+	},
+	T_RaycastWeapon = {
+		ExcludeInstances = {"Self"}
 	}
 }
 
@@ -192,7 +195,7 @@ local function GetRaycastParams(presetKey: string, config: {[string]: any})
 	return raycastParams
 end
 
-local function GetTurretRaycastParams(presetKey: string, config: {[string]: any})
+function SpatialQueryConfig.GetRaycastParams(presetKey: string, config: {[string]: any})
 	local presetKeyIsValid: boolean? = AssertHelper.InvalidArgAssert(
 		type(presetKey) == "string",
 		presetKey,
@@ -251,7 +254,7 @@ SpatialQueryConfig.overlapParams = {
 }
 
 SpatialQueryConfig.raycastParams = {
-	T_Turret = GetTurretRaycastParams
+	T_Turret = SpatialQueryConfig.GetRaycastParams
 }
 
 SpatialQueryConfig.queryTypes = {

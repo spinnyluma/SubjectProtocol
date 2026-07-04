@@ -30,6 +30,22 @@ SystemManagerModule.world = {
 	["Game"] = {}
 }
 
+--[[
+	Sets a value in the SystemManagerModule.world.Game table.
+]]
+function SystemManagerModule.SetGlobalGameState(key: string, value: any)
+	local keyIsValid = AssertHelper.InvalidArgAssert(
+		type(key) == "string",
+		key,
+		"key",
+		" SystemManagerModule.SetGlobalGameState",
+		"string"
+	)
+	if(not keyIsValid) then return end
+	
+	SystemManagerModule.world.Game[key] = value
+end
+
 
 --[[
 	Gets the component's index by an entity.

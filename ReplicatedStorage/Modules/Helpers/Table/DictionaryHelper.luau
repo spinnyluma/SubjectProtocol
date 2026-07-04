@@ -79,4 +79,25 @@ function DictionaryHelper.GetValues<TKey, TValue>(tableToGetValuesFrom: {[TKey]:
 	return values
 end
 
+function DictionaryHelper.GetRandomValueFromDict(dictionary: {[string]: any?}): any?
+	local dictionaryIsValid = AssertHelper.InvalidArgAssert(
+		type(dictionary) == "table",
+		dictionary,
+		"dictionary",
+		"DictionaryHelper.GetRandomValueFromDict",
+		"table"
+	)
+	if(not dictionaryIsValid) then return nil end
+	
+	local keys: {string?}? = DictionaryHelper.GetKeys(dictionary)
+	if(not keys) then return nil end
+	
+	
+	local random: Random = Random.new()
+	local nextRandomInt: number = random:NextInteger(1, #keys)
+	
+	
+	return dictionary[keys[nextRandomInt]]
+end
+
 return DictionaryHelper

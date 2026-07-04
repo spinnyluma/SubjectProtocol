@@ -1,15 +1,19 @@
 local CollectionService = game:GetService("CollectionService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local ServerStorage = game:GetService("ServerStorage")
 local Players = game:GetService("Players")
+
 
 local TurretConfig = require(ReplicatedStorage.Modules.Shared.Constants.TurretConfig)
 local TurretSystemConfig = require(script.Config)
-
+local ModeConfig = require(ReplicatedStorage.Modules.Shared.Constants.ModeConfig)
 local SpatialQueryConfig = require(ReplicatedStorage
 	.Modules
 	.Shared
 	.Constants
 	.SpatialQueryConfig)
+
+local FacilityModeSignals = require(ServerStorage.Modules.ECS.Systems.FacilityModeSystem.Signals)
 
 local AssertHelper = require(ReplicatedStorage.Modules.Helpers.Debug.AssertHelper)
 local PlayerHelper = require(ReplicatedStorage.Modules.Helpers.Player.PlayerHelper)
@@ -32,7 +36,9 @@ local replicateTurretRotationRE = ReplicatedStorage
 	.ReplicateTurretRotation
 
 local TURRET_RAY_LENGTH = 300
-local TURRET_SPREAD_RADIUS = 4
+local TURRET_SPREAD_RADIUS = 5
+
+local currentTeamsTargeted: {Team?} = {}
 
 
 local TurretSystem = {}
@@ -83,6 +89,22 @@ local function FireTurretRay(player: Player,
 	return raycastResult
 end
 
+local function CanTargetPlayer(player: Player): boolean?
+	local playerIsValid = AssertHelper.InvalidArgAssert(
+		typeof(player) == "Instance"
+			and player:IsA("Player"),
+		player,
+		"player",
+		"CanTargetPlayer",
+		"Player"
+	)
+	if(not playerIsValid) then return nil end
+	
+	
+	local playerInTargetedTeam: boolean = table.find(currentTeamsTargeted, player.Team)
+	return playerInTargetedTeam ~= nil
+end
+
 local function ShootTurret(turret: Model)
 	local turretIsValid = AssertHelper.InvalidArgAssert(
 		typeof(turret) == "Instance"
@@ -122,7 +144,12 @@ local function ShootTurret(turret: Model)
 			"Player"
 		)
 		if(not playerIsValid) then continue end
-
+		
+		local playerCanBeTargeted: boolean? = CanTargetPlayer(player)
+		
+		if(not playerCanBeTargeted) then
+			return
+		end
 		local paramsFn: (string, {[string]: any}) -> RaycastParams? = SpatialQueryConfig.raycastParams[TurretConfig.TURRET_TAG_NAME]
 		local paramsFnIsValid = AssertHelper.ExpectedValAssert(
 			typeof(paramsFn) == "function",
@@ -195,21 +222,40 @@ local function ShootTurret(turret: Model)
 end
 
 function TurretSystem.Update()
-	--local turrets: {Model?} = CollectionService:GetTagged(TurretConfig.TURRET_TAG_NAME)
+	local turrets: {Model?} = CollectionService:GetTagged(TurretConfig.TURRET_TAG_NAME)
 
-	--for _, turret in turrets do
-	--	local barrel: BasePart? = turret:FindFirstChild("Barrel")
-	--	local barrelIsValid = typeof(barrel) == "Instance"
-	--		and barrel:IsA("BasePart")
+	for _, turret in turrets do
+		local barrel: BasePart? = turret:FindFirstChild("Barrel")
+		local barrelIsValid = typeof(barrel) == "Instance"
+			and barrel:IsA("BasePart")
 		
-	--	if(not barrelIsValid) then continue end
-	--	ShootTurret(turret)
-	--end
+		if(not barrelIsValid) then continue end
+		ShootTurret(turret)
+	end
+end
+
+local function SetTurretTargetFromMode(newMode: ModeConfig.Mode)
+	local newModeIsValid = AssertHelper.InvalidArgAssert(
+		ModeConfig.modes[newMode] ~= nil,
+		newMode,
+		"newMode",
+		"SetTurretTargetFromMode",
+		"ModeConfig.Mode"
+		
+	)
+	if(not newModeIsValid) then return end
+	
+	local targetedTeams: {Team?}? = TurretSystemConfig.modeToTurretTargetedTeams[newMode]
+	if(not targetedTeams) then return end
+	currentTeamsTargeted = targetedTeams
 end
 
 
 function TurretSystem.Initialize()
-	
+	--TODO: change target depednding on mode
+	FacilityModeSignals.ModeChanged:Connect(function(newMode: ModeConfig.Mode, oldMode: ModeConfig.Mode)
+		SetTurretTargetFromMode(newMode)
+	end)
 end
 
 return TurretSystem

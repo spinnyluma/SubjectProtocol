@@ -1,6 +1,6 @@
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Players = game:GetService("Players")
-
+local TweenService = game:GetService("TweenService")
 
 local ReplicaConfig = require(ReplicatedStorage.Modules.Shared.Constants.ReplicaConfig)
 local ModeConfig = require(ReplicatedStorage.Modules.Shared.Constants.ModeConfig)
@@ -13,6 +13,7 @@ local AssertHelper = require(ReplicatedStorage.Modules.Helpers.Debug.AssertHelpe
 local facilityModeSelection: ScreenGui? = nil
 local facilityModeContainer: Frame? = nil
 local modeSelectionButtons: Frame? = nil
+local voteTimeFillbar: Frame? = nil
 
 local selectionButton: ImageButton = ReplicatedStorage.Assets.UI.Templates.SelectionButton
 
@@ -52,6 +53,10 @@ local function InitializeUiElements()
 	facilityModeContainer = facilityModeSelection:WaitForChild("FacilityModeContainer")
 	local selection = facilityModeContainer:WaitForChild("Selection")
 	modeSelectionButtons = selection:WaitForChild("ModeSelectionButtons")
+	
+	
+	local voteTime: CanvasGroup = facilityModeContainer:WaitForChild("VoteTime")
+	voteTimeFillbar = voteTime:WaitForChild("Fillbar")
 end
 
 local function SetupSelectionButton(selectionButton: ImageButton, mode: ModeConfig.Mode)
@@ -150,6 +155,51 @@ local function InitializeSelectionButtons(modes: {ModeConfig.Mode?})
 	end
 end
 
+local function TweenModeVoteTimeBar(modeVoteEndTime: number)
+	local modeVoteEndTimeIsValid = AssertHelper.InvalidArgAssert(
+		type(modeVoteEndTime) == "number",
+		modeVoteEndTime,
+		"modeVoteEndTime",
+		"TweenModeVoteTimeBar",
+		"number"
+	)
+	if(not modeVoteEndTimeIsValid) then return end
+	
+	local currentTimeLeft: number = modeVoteEndTime - workspace:GetServerTimeNow()
+	if(currentTimeLeft <= 0) then
+		return
+	end
+	
+	if(not voteTimeFillbar) then return end
+	local timeBarScaleX: number? = currentTimeLeft / ModeConfig.MODE_VOTE_TIME
+	local timeBarScaleXIsValid = AssertHelper.ExpectedValAssert(
+		timeBarScaleX > 0,
+		timeBarScaleX,
+		"timeBarScaleX",
+		"Time fillbar X scale must be greater than 0"
+	)
+	
+	if(not timeBarScaleXIsValid) then return end
+	
+	local timeBarSize: UDim2 = UDim2.fromScale(timeBarScaleX, 1)
+	
+	voteTimeFillbar.Size = timeBarSize
+	
+	local tweenInfo: TweenInfo = TweenInfo.new(
+		currentTimeLeft,
+		Enum.EasingStyle.Linear,
+		Enum.EasingDirection.In
+	)
+	local tween: Tween = TweenService:Create(
+		voteTimeFillbar,
+		tweenInfo,
+		{
+			Size = UDim2.fromScale(0, 1)
+		}
+	)
+	tween:Play()
+end
+
 function FacilityModeUiSystem.Initialize()
 	InitializeUiElements()
 	Replica.OnNew(ReplicaConfig.replicaTokens.Mode.Name, function(replica: Replica.Replica)
@@ -179,16 +229,54 @@ function FacilityModeUiSystem.Initialize()
 		else
 			SetFacilityModeSelectionVisibility(false)
 		end
-		replica:OnSet({"VoteOngoing"}, function(newValue: boolean, oldValue: boolean)
-			print(newValue)
-			if(newValue) then
+		replica:OnChange(function(action: string, path: {string | number}, values: any)
+			
+						
+			if(action ~=  "SetValues"
+				or (type(values) ~= "table")
+				or (#path ~= 0)
+				or (values["Modes"] == nil)
+				or (values["VoteOngoing"] == nil)
+				or (values["VoteEndTime"]) == nil) then
+				
+				return	
+			end
+			
+			local voteOngoing: boolean? = values["VoteOngoing"]
+			local voteOngoingIsValid = AssertHelper.ExpectedValAssert(
+				type(voteOngoing) == "boolean",
+				voteOngoing,
+				"voteStarted",
+				"boolean"
+			)
+			if(not voteOngoingIsValid) then return end
+			
+			local modes: {ModeConfig.Mode?}? = values["Modes"]
+			local modesIsValid = AssertHelper.ExpectedValAssert(
+				type(modes) == "table",
+				modes,
+				"modes",
+				"table"
+			)
+			if(not modesIsValid) then return end
+			
+			local voteEndTime: number? = values["VoteEndTime"]
+			local voteEndTimeIsValid = AssertHelper.ExpectedValAssert(
+				type(voteEndTime) == "number",
+				voteEndTime,
+				"voteEndTime",
+				"number"
+			)
+			if(not voteEndTimeIsValid) then return end
+			if(voteOngoing) then
 				InitializeSelectionButtons(modes)
 				SetFacilityModeSelectionVisibility(true)
+				TweenModeVoteTimeBar(voteEndTime)
 			else
-				print("went ehre")
 				SetFacilityModeSelectionVisibility(false)
 			end
 		end)
+			
 		
 	end)
 end
