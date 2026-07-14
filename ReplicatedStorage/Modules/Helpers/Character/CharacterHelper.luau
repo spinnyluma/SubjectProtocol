@@ -6,6 +6,10 @@ local AssertHelper = require(ReplicatedStorage
 	.Debug
 	.AssertHelper
 )
+local DataModelHelper = require(ReplicatedStorage.Modules.Helpers.DataModel.DataModelHelper)
+
+local CharacterConfig = require(ReplicatedStorage.Modules.Shared.Constants.CharacterConfig)
+
 
 local CharacterHelper = {}
 
@@ -314,4 +318,53 @@ function CharacterHelper.IsPartExistentInCharacter(character: Model, part: BaseP
 	
 	return foundPart == part
 end
+
+
+--[[
+	Checks if a part is in any character model.
+	
+	@param BasePart part The part to check.
+	@returns Model? The character model that the part is in.
+]]
+function CharacterHelper.IsPartInCharacterModel(part: Instance): Model?
+	local partIsValid: boolean? = AssertHelper.InvalidArgAssert(
+		typeof(part) == "Instance"
+		and part:IsA("BasePart"),
+		part,
+		"part",
+		"CharacterHelper.IsPartInCharacterModel",
+		"BasePart"
+	)
+	if(not partIsValid) then
+		return nil
+	end
+	
+	local characterModel = DataModelHelper.GetRootParentWithTag(part, CharacterConfig.CHARACTER_TAG_NAME)
+
+	return characterModel ~= nil
+end
+
+function CharacterHelper.IsCharacterDead(character: Model): boolean
+	
+	local characterIsValid: boolean? = AssertHelper.InvalidArgAssert(
+		typeof(character) == "Instance"
+		and character:IsA("Model"),
+		character,
+		"character",
+		"CharacterHelper.IsCharacterDead",
+		"Model"
+	)
+	if(not characterIsValid) then
+		return true
+	end
+	
+	local humanoid = character:FindFirstChildWhichIsA("Humanoid")
+	if(not humanoid) then
+		return true
+	end
+	
+	local humanoidState = humanoid:GetState()
+	return humanoidState == Enum.HumanoidStateType.Dead
+end
+
 return CharacterHelper

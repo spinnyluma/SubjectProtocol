@@ -22,4 +22,30 @@ function TableHelper.GetRandomValueFromTable(tableToGetValueFrom: {any?}): any?
 	return tableToGetValueFrom[nextInt]
 end
 
+function TableHelper.JoinTables(baseTable: {any?}, ...: {any?})
+	local baseTableIsValid = AssertHelper.InvalidArgAssert(
+		type(baseTable) == "table",
+		baseTable,
+		"baseTable",
+		"TableHelper.JoinTables",
+		"table"
+	)
+	if(not baseTableIsValid) then return end
+	local varArgsTable = {...}
+	
+	for _, tableToJoin in varArgsTable do
+		local tableToJoinIsValid = AssertHelper.ExpectedValAssert(
+			type(tableToJoin) == "table",
+			tableToJoin,
+			"tableToJoin",
+			"table"
+		)
+		if(not tableToJoinIsValid) then continue end
+		for _, element in tableToJoin do
+			table.insert(baseTable, element)
+		end
+	end
+	return baseTable
+end
+
 return TableHelper

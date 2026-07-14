@@ -40,10 +40,7 @@ function CframeHelper.GetMidCframe(cframe1: CFrame, cframe2: CFrame): CFrame?
 
 	local positionBetweenMagnitude1: Vector3 = cframe1:PointToObjectSpace(cframe2Position) / 2
 
-	--[[
-		Look at the new rotation from the position in-between the two cframes
-		because we want the cframe to have the correct orientation.
-	]]
+	
 	local newPosition: Vector3 = cframe1:PointToWorldSpace(positionBetweenMagnitude1)
 	
 	local newCframe: CFrame = CFrame.new(newPosition)

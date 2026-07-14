@@ -8,6 +8,8 @@ local TerminalSignals = require(ServerStorage.Modules.ECS.Systems.TerminalContro
 local TeamConfig = require(ReplicatedStorage.Modules.Shared.Constants.TeamConfig)
 local ReplicaConfig = require(ReplicatedStorage.Modules.Shared.Constants.ReplicaConfig)
 local ModeConfig = require(ReplicatedStorage.Modules.Shared.Constants.ModeConfig)
+local FacilityModeConfig = require(script.Config)
+
 
 local FacilityModeSignals = require(script.Signals)
 
@@ -28,6 +30,8 @@ local facilityModeSelectionTrove: Trove.Trove = Trove.new()
 
 local currentMode: ModeConfig.Mode? = ModeConfig.modes.Idle.Name
 
+
+local voteOccurredForCurrentSubjectCapture = false
 
 local submitModeVoteRE: RemoteEvent = ReplicatedStorage.Assets.Shared.Remotes.Events.SubmitModeVote
 
@@ -235,6 +239,7 @@ local function SetSelectedMode(mode: ModeConfig.Mode)
 	if(oldMode ~= currentMode) then
 		FacilityModeSignals.ModeChanged:Fire(currentMode, oldMode)
 	end
+	SystemManagerModule.SetGlobalGameState("CurrentMode", currentMode)
 end
 
 local function InitializeModeVoteProcess()
@@ -264,10 +269,26 @@ local function InitializeModeVoteProcess()
 					return Promise.reject(`Unable to select a mode from compiled votes, expected ModeConfig.Mode, got {selectedMode}`)
 				end
 				SetSelectedMode(selectedMode)
+
 				return Promise.resolve()
 
 			end
-			
+		end)
+		:andThen(function()
+			local modeDurationEndedSuccess = TimeHelper.CreateCountdownInSeconds(ModeConfig.MODE_DURATION)
+			if(not modeDurationEndedSuccess) then
+				return Promise.reject("Mode duration countdown could not be started properly")
+			end
+			SetSelectedMode(ModeConfig.modes.Idle.Name)
+		end)
+		:andThen(function()
+			local currentModeVoteCooldown = SystemManagerModule.GetGlobalGameState("ModeVoteCooldown")
+			local modeVoteCooldownEndTime = os.clock() + currentModeVoteCooldown
+			while (os.clock() < modeVoteCooldownEndTime) do
+				task.wait()
+				SystemManagerModule.SetGlobalGameState("ModeVoteCooldown", modeVoteCooldownEndTime - os.clock())
+			end
+			SystemManagerModule.SetGlobalGameState("ModeVoteCooldown", 0)
 		end)
 		:catch(function(error)
 			AssertHelper.Warn(tostring(error))
@@ -300,8 +321,31 @@ local function AddVoteToCurrentVotes(player: Player, votedMode: ModeConfig.Mode)
 	currentVotes[player] = votedMode
 end
 
+local function SetupOnModeVoteVariables()
+	voteOccurredForCurrentSubjectCapture = true
+	SystemManagerModule.SetGlobalGameState("ModeVoteCooldown", FacilityModeConfig.MODE_COOLDOWN)
+	local modes = GetRandomModes(ModeConfig.NUMBER_OF_MODES)
+	local modesIsValid = AssertHelper.ExpectedValAssert(
+		type(modes) == "table",
+		modes,
+		"modes",
+		"table"
+	)
+	if(not modesIsValid) then return end
+
+	currentRandomModes = modes
+	local voteEndTime = workspace:GetServerTimeNow() + ModeConfig.MODE_VOTE_TIME
+	modeReplica:SetValues({}, {
+		VoteOngoing = true,
+		Modes = modes,
+		VoteEndTime = voteEndTime
+	})
+	voteOngoing = true
+end
+
 function FacilityModeSystem.Initialize()
 	SystemManagerModule.SetGlobalGameState("CurrentMode", currentMode)
+	SystemManagerModule.SetGlobalGameState("ModeVoteCooldown", 0)
 	ReplicateReplicaToSubjects()
 	submitModeVoteRE.OnServerEvent:Connect(function(player: Player, votedMode: ModeConfig.Mode)
 		if(not voteOngoing) then return end
@@ -315,26 +359,47 @@ function FacilityModeSystem.Initialize()
 		
 		AddVoteToCurrentVotes(player, votedMode)
 	end)
-	TerminalSignals.ModeVoteAvailable:Connect(function()
-		local modes = GetRandomModes(ModeConfig.NUMBER_OF_MODES)
-		local modesIsValid = AssertHelper.ExpectedValAssert(
-			type(modes) == "table",
-			modes,
-			"modes",
-			"table"
-		)
-		if(not modesIsValid) then return end
+	TerminalSignals.TerminalOwnerChanged:Connect(function(terminalOwner: Team, oldTerminalOwner: Team)
+		if(terminalOwner ~= oldTerminalOwner) then
+			voteOccurredForCurrentSubjectCapture = false
+		end
 		
-		currentRandomModes = modes
-		local voteEndTime = workspace:GetServerTimeNow() + ModeConfig.MODE_VOTE_TIME
-		modeReplica:SetValues({}, {
-			VoteOngoing = true,
-			Modes = modes,
-			VoteEndTime = voteEndTime
-		})
-		voteOngoing = true
-		ReplicateReplicaToSubjects()
-		InitializeModeVoteProcess()
+		if(voteOccurredForCurrentSubjectCapture) then return end
+		
+		local facilityModeCooldown = SystemManagerModule.GetGlobalGameState("ModeVoteCooldown")
+		local facilityModeCooldownIsValid = AssertHelper.ExpectedValAssert(
+			type(facilityModeCooldown) == "number",
+			facilityModeCooldown,
+			"facilityModeCooldown",
+			"number"
+		)
+		if(not facilityModeCooldownIsValid) then return end
+		if(terminalOwner == TeamConfig.teams.Subjects.Team) then
+			if(facilityModeCooldown == 0) then
+				SetupOnModeVoteVariables()
+				ReplicateReplicaToSubjects()
+				InitializeModeVoteProcess()	
+			else
+				local voteCooldownEndedSuccess = TimeHelper.CreateCountdownInSeconds(FacilityModeConfig.MODE_COOLDOWN)
+				local currentTerminalOwner = SystemManagerModule.GetGlobalGameState("TerminalOwner")
+				local currentTerminalOwnerIsValid = AssertHelper.ExpectedValAssert(
+					typeof(currentTerminalOwner) == "Instance"
+						and currentTerminalOwner:IsA("Team"),
+					currentTerminalOwner,
+					"currentTerminalOwner",
+					"TerminalOwner",
+					"Team"
+				)
+				if(not currentTerminalOwnerIsValid) then return end
+				
+				SetupOnModeVoteVariables()
+				ReplicateReplicaToSubjects()
+				InitializeModeVoteProcess()
+			end
+		end
+	end)
+	TerminalSignals.ModeVoteAvailable:Connect(function()
+		
 
 	end)
 	

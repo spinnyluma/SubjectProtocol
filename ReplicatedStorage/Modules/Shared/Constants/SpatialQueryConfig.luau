@@ -3,6 +3,8 @@ local AssertHelper = require(ReplicatedStorage.Modules.Helpers.Debug.AssertHelpe
 
 local SpatialQueryConfig = {}
 
+SpatialQueryConfig.STATIC_GEOMETRY_SELECTOR = `BasePart:not(.T_Character >> Instance, #{workspace.DynamicGeometry.Name} >> Instance)`
+
 local overlapParamsPresets = {
 	T_Keycard = {
 		ExcludeInstances = {"Player"}
@@ -17,7 +19,7 @@ local raycastParamsPresets = {
 		ExcludeInstances = {"Self"}
 	},
 	T_RaycastWeapon = {
-		ExcludeInstances = {"Self"}
+		ExcludeInstances = {"Self", "AdditionalInstances"}
 	}
 }
 
@@ -84,6 +86,18 @@ local function GetOverlapParams(presetKey: string, config: {[string]: any}): Ove
 					)
 					if(not selfIsValid) then return end
 					table.insert(excludeInstances, selfInstance)
+				elseif(instanceName == "AdditionalInstances") then
+					local additionalInstances = config["AdditionalInstances"]
+					local additionalInstancesIsValid: boolean? = AssertHelper.ExpectedValAssert(
+						type(additionalInstances) == "table",
+						additionalInstances,
+						"additionalInstances",
+						"table"
+					)
+					if(not additionalInstancesIsValid) then return end
+					for _, instance in additionalInstances do
+						table.insert(excludeInstances, instance)
+					end
 				end
 			end
 		else
@@ -171,7 +185,7 @@ local function GetRaycastParams(presetKey: string, config: {[string]: any})
 						"player",
 						"Model"
 					)
-					if(not playerIsValid) then return end
+					if(not playerIsValid) then continue end
 					table.insert(excludeInstances , player)
 				elseif(instanceName == "Self") then
 					local selfInstance: Model? = config["Self"]
@@ -182,8 +196,21 @@ local function GetRaycastParams(presetKey: string, config: {[string]: any})
 						"self",
 						"Model"
 					)
-					if(not selfIsValid) then return end
+					if(not selfIsValid) then continue end
 					table.insert(excludeInstances, selfInstance)
+				elseif(instanceName == "AdditionalInstances") then
+					local additionalInstances: {Model?}? = config["AdditionalInstances"]
+					local additionalInstancesIsValid: boolean? = AssertHelper.ExpectedValAssert(
+						type(additionalInstances) == "table",
+						additionalInstances,
+						"additionalInstances",
+						"table"
+					)
+					if(not additionalInstancesIsValid) then continue end
+					
+					for _, instance in additionalInstances do
+						table.insert(excludeInstances, instance)
+					end
 				end
 			end
 		else

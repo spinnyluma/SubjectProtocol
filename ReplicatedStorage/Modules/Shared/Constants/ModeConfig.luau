@@ -27,5 +27,7 @@ ModeConfig.modeDescriptions = {
 }
 
 ModeConfig.NUMBER_OF_MODES = 3
-ModeConfig.MODE_VOTE_TIME = 10
+ModeConfig.MODE_VOTE_TIME = 2
+
+ModeConfig.MODE_DURATION = 30
 return ModeConfig

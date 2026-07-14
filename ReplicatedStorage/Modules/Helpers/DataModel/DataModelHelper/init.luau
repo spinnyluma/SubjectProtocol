@@ -246,7 +246,13 @@ function DataModelHelper.GetRootParentWithTag(instance: Instance,
 	
 	local instanceWithTag: Instance = nil
 	local currentInstance = instance
+
 	local currentDepth: number = 0
+	
+	if(CollectionService:HasTag(currentInstance, tagName)) then
+		return currentInstance
+	end
+
 	while currentDepth < ITERATION_MAX_DEPTH
 		and currentInstance.Parent ~= nil
 		and currentInstance.Parent.Parent ~= game do
@@ -379,6 +385,45 @@ function DataModelHelper.WaitForChildWithName(parent: Instance, name: string, ti
 	end
 	
 	return Promise.resolve(child)
+end
+
+
+--[[
+	Gets the instances that are NOT a particular instance under the same level in the DataModel
+	hierarchy.
+	
+	@param instance Instance The instance to invert the selection for.
+	@returns {Instance?} The list of instances that are NOT the passed instance under the same DataModel hierarchy level.
+]]
+function DataModelHelper.InvertSelection(instance: Instance): {Instance?}?
+	local instanceIsValid = AssertHelper.InvalidArgAssert(
+		typeof(instance) == "Instance",
+		instance,
+		"instance",
+		"DataModelHelper.InvertSelection",
+		"Instance"
+	)
+	if not instanceIsValid then return end
+	
+	
+	local parentInstance = instance.Parent
+	local parentInstanceIsValid = AssertHelper.ExpectedValAssert(
+		typeof(parentInstance) == "Instance",
+		parentInstance,
+		"parentInstance",
+		"DataModelHelper.InvertSelection",
+		"Instance"
+	)
+	if not parentInstanceIsValid then return end
+	
+	local children = parentInstance:GetChildren()
+	local invertedSelection = {}
+	for _, child in children do
+		if child ~= instance then
+			table.insert(invertedSelection, child)
+		end
+	end
+	return invertedSelection
 end
 
 return DataModelHelper

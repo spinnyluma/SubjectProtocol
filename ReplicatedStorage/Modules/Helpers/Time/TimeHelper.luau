@@ -12,9 +12,10 @@ local TimeHelper = {}
 	
 	@yields
 	@param number numberOfSeconds The number of seconds to count down.
+	@param function callbackAfterTick The function to call on each tick.
 	@returns boolean Whether the countdown successfully counted down.
 ]]
-function TimeHelper.CreateCountdownInSeconds(numberOfSeconds: number): boolean
+function TimeHelper.CreateCountdownInSeconds(numberOfSeconds: number, callbackOnTick: (any?) -> (any?)): boolean
 	local numberOfSecondsIsValid = AssertHelper.InvalidArgAssert(
 		type(numberOfSeconds) == "number",
 		numberOfSeconds,
@@ -24,13 +25,28 @@ function TimeHelper.CreateCountdownInSeconds(numberOfSeconds: number): boolean
 	)
 	if(not numberOfSecondsIsValid) then return false end
 	
+	local callbackAfterTickIsValid = AssertHelper.InvalidArgAssert(
+		type(callbackOnTick) == "function"
+			or type(callbackOnTick) == "nil",
+		callbackOnTick,
+		"callbackAfterTick",
+		"TimeHelper.CreateCountdownInSeconds",
+		"function?"
+	)
+	if(not callbackAfterTickIsValid) then return false end
+	
 	local endTime = os.clock() + numberOfSeconds
 	
 	while (os.clock() < endTime) do
+		if(callbackOnTick) then
+			callbackOnTick()
+		end
 		task.wait()
 	end
 	
 	return true
 end
+
+
 
 return TimeHelper

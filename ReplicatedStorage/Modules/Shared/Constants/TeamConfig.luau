@@ -12,6 +12,11 @@ TeamConfig.teams = {
 		Name = "Subjects",
 		Team = Teams.Subjects,
 		Value = 1
+	},
+	Choosing = {
+		Name = "Choosing",
+		Team = Teams.Choosing,
+		Value = 2
 	}
 }
 

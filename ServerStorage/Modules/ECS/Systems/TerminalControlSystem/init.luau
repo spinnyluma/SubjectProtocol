@@ -19,7 +19,7 @@ local SystemManagerModule = require(ReplicatedStorage.Modules.ECS.SystemManagerM
 local TerminalSignals = require(script.Signals)
 
 local Replica = require(ServerStorage.Modules.Utilities.ReplicaServer)
-
+local Trove = require(ReplicatedStorage.Modules.Utilities.Trove)
 
 local TerminalControlSystem = {}
 
@@ -27,14 +27,14 @@ local currentTerminalContestState = TerminalConfig.terminalContestStates.Unconte
 local terminalOwner: Team = TeamConfig.teams.Guards.Team
 
 
-local currentModeCooldownTime = 0
-local voteOccurredForCurrentSubjectCapture = false
 
 local currentTerminalContestTime = 0
 local contestingConnection: RBXScriptConnection? = nil
 
 
 local cooldownDecrementConnection: RBXScriptConnection? = nil
+
+
 
 local terminalReplica = Replica.New({
 	Token = Replica.Token(ReplicaConfig.replicaTokens.Terminal.Name),
@@ -152,32 +152,15 @@ local function SetTerminalOwner(newTerminalOwner: Team)
 	terminalOwner = newTerminalOwner
 	
 	if(oldTerminalOwner ~= terminalOwner) then
-		voteOccurredForCurrentSubjectCapture = false
+		SystemManagerModule.SetGlobalGameState("TerminalOwner", newTerminalOwner)
+
 		TerminalSignals.TerminalOwnerChanged:Fire(terminalOwner, oldTerminalOwner)
+					
 	end
+	
 	terminalReplica:Set({"TerminalOwner"}, newTerminalOwner)
 	
-	if(voteOccurredForCurrentSubjectCapture) then return end
-	if(terminalOwner == TeamConfig.teams.Subjects.Team) then
-		if(currentModeCooldownTime == 0) then
-			TerminalSignals.ModeVoteAvailable:Fire()
-			voteOccurredForCurrentSubjectCapture = true
-			currentModeCooldownTime = 2
-			
-			cooldownDecrementConnection = RunService.Heartbeat:Connect(function(deltaTime: number)
-				currentModeCooldownTime -= deltaTime
-				if(currentModeCooldownTime <= 0) then
-					cooldownDecrementConnection:Disconnect()
-					if(not voteOccurredForCurrentSubjectCapture) then
-						currentModeCooldownTime = 0
-						TerminalConfig.ModeVoteAvailable:Fire()
-					end
-				end
-			end)
-		end
-	else
-		
-	end
+	
 end
 
 
@@ -403,8 +386,10 @@ local function HandleTerminalControlSystem(proximityInteractionType: string,
 	AddTerminalContestStateThread(teamFromControlType)
 end
 
+
+
 function TerminalControlSystem.Initialize()
-	
+	SystemManagerModule.SetGlobalGameState("TerminalOwner", TeamConfig.teams.Guards.Team)
 	ProximitySignals.ProximityObjectsFound:Connect(function(proximityInteractionType: string,
 		querySource: Instance,
 		instancesFound: {Instance?}

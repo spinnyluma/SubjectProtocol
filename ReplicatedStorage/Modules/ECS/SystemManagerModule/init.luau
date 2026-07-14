@@ -33,7 +33,7 @@ SystemManagerModule.world = {
 --[[
 	Sets a value in the SystemManagerModule.world.Game table.
 ]]
-function SystemManagerModule.SetGlobalGameState(key: string, value: any)
+function SystemManagerModule.SetGlobalGameState(key: string, value: any): any?
 	local keyIsValid = AssertHelper.InvalidArgAssert(
 		type(key) == "string",
 		key,
@@ -44,9 +44,32 @@ function SystemManagerModule.SetGlobalGameState(key: string, value: any)
 	if(not keyIsValid) then return end
 	
 	SystemManagerModule.world.Game[key] = value
+	return SystemManagerModule.world.Game[key]
 end
 
-
+function SystemManagerModule.GetGlobalGameState(key: string)
+	local keyIsValid = AssertHelper.InvalidArgAssert(
+		type(key) == "string",
+		key,
+		"key",
+		" SystemManagerModule.GetGlobalGameState",
+		"string"
+	)
+	if(not keyIsValid) then return nil end
+	
+	local existingPairValue = SystemManagerModule.world.Game[key]
+	local existingPairValueIsValid = AssertHelper.ExpectedValAssert(
+		typeof(existingPairValue) ~= "nil",
+		existingPairValue,
+		"existingPairValue",
+		"SystemManagerModule.GetGlobalGameState",
+		"any"
+	)
+	if(not existingPairValue) then
+		return nil
+	end
+	return existingPairValue
+end
 --[[
 	Gets the component's index by an entity.
 	

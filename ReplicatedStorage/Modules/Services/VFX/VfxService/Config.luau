@@ -1,7 +1,5 @@
 local Config = {}
 
-Config.MODE_COOLDOWN = 5
-
-
+Config.VFX_TAG_NAME = "T_Vfx"
 
 return Config

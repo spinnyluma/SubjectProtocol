@@ -36,8 +36,8 @@ local terminalUiDisappearTweenInfo = TweenInfo.new(
 local designFolder = ReplicatedStorage.Assets.Design
 
 local terminalOwnerFillbarStyleSheet = designFolder.TerminalOwnerFillbar
-local guardsTerminalFillbarTheme = designFolder.TerminalOwnerThemes.GuardsTerminalFillbar
-local subjectsTerminalFillbarTheme = designFolder.TerminalOwnerThemes.SubjectsTerminalFillbar
+local GuardsTeamTheme = designFolder.TeamThemes.GuardsTeam
+local SubjectsTeamTheme = designFolder.TeamThemes.SubjectsTeam
 
 local TerminalUiSystem = {}
 
@@ -397,9 +397,9 @@ function TerminalUiSystem.Initialize()
 			end
 			
 			if(newValue == TerminalConfig.terminalContestStates.GuardsContesting.Name) then
-				terminalOwnerFillbarStyleSheet:SetDerives({guardsTerminalFillbarTheme})
+				terminalOwnerFillbarStyleSheet:SetDerives({GuardsTeamTheme})
 			else
-				terminalOwnerFillbarStyleSheet:SetDerives({subjectsTerminalFillbarTheme})
+				terminalOwnerFillbarStyleSheet:SetDerives({SubjectsTeamTheme})
 			end
 		end)
 		

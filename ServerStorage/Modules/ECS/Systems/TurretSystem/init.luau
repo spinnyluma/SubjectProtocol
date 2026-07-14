@@ -12,6 +12,8 @@ local SpatialQueryConfig = require(ReplicatedStorage
 	.Shared
 	.Constants
 	.SpatialQueryConfig)
+local CombatServiceConfig = require(ReplicatedStorage.Modules.Services.Combat.CombatService.Config)
+
 
 local FacilityModeSignals = require(ServerStorage.Modules.ECS.Systems.FacilityModeSystem.Signals)
 
@@ -20,6 +22,7 @@ local PlayerHelper = require(ReplicatedStorage.Modules.Helpers.Player.PlayerHelp
 local VectorHelper = require(ReplicatedStorage.Modules.Helpers.Vector.VectorHelper)
 local CharacterHelper = require(ReplicatedStorage.Modules.Helpers.Character.CharacterHelper)
 
+local SystemManagerModule = require(ReplicatedStorage.Modules.ECS.SystemManagerModule)
 
 local CombatService = require(ReplicatedStorage
 	.Modules
@@ -27,6 +30,14 @@ local CombatService = require(ReplicatedStorage
 	.Combat
 	.CombatService
 )
+local VfxService = require(ReplicatedStorage
+	.Modules
+	.Services
+	.VFX
+	.VfxService
+)
+
+local CombatServiceSignals = require(ReplicatedStorage.Modules.Services.Combat.CombatService.Signals)
 
 local replicateTurretRotationRE = ReplicatedStorage
 	.Assets
@@ -36,7 +47,7 @@ local replicateTurretRotationRE = ReplicatedStorage
 	.ReplicateTurretRotation
 
 local TURRET_RAY_LENGTH = 300
-local TURRET_SPREAD_RADIUS = 5
+local TURRET_SPREAD_RADIUS = 4
 
 local currentTeamsTargeted: {Team?} = {}
 
@@ -147,9 +158,7 @@ local function ShootTurret(turret: Model)
 		
 		local playerCanBeTargeted: boolean? = CanTargetPlayer(player)
 		
-		if(not playerCanBeTargeted) then
-			return
-		end
+		if(not playerCanBeTargeted) then continue end
 		local paramsFn: (string, {[string]: any}) -> RaycastParams? = SpatialQueryConfig.raycastParams[TurretConfig.TURRET_TAG_NAME]
 		local paramsFnIsValid = AssertHelper.ExpectedValAssert(
 			typeof(paramsFn) == "function",
@@ -176,6 +185,7 @@ local function ShootTurret(turret: Model)
 			TURRET_RAY_LENGTH,
 			params
 		)
+		print("player is in view of part ", playerIsInViewOfPart)
 		if(not playerIsInViewOfPart) then continue end
 		local players = Players:GetPlayers()
 		
@@ -189,9 +199,9 @@ local function ShootTurret(turret: Model)
 		if(resultIsRaycastResult) then
 			local resultInstance = fireRayResult.Instance
 			local resultInstancePosition = resultInstance.Position
-
+		
 			CombatService.ReplicateRay(firePoint,
-				resultInstancePosition,
+				fireRayResult.Position,
 				players
 			)
 			
@@ -199,6 +209,7 @@ local function ShootTurret(turret: Model)
 			
 			local character = player.Character
 			if(not character) then return end
+			--TODO: switch to alive character
 			local instanceIsInCharacter: boolean? = CharacterHelper.IsPartExistentInCharacter(character,
 				resultInstance
 			)
@@ -222,9 +233,22 @@ local function ShootTurret(turret: Model)
 end
 
 function TurretSystem.Update()
+	local currentMode = SystemManagerModule.GetGlobalGameState("CurrentMode")
+	if(currentMode ~= ModeConfig.modes.TurretOverride.Name) then return end
+	
 	local turrets: {Model?} = CollectionService:GetTagged(TurretConfig.TURRET_TAG_NAME)
 
 	for _, turret in turrets do
+		local health = turret:GetAttribute(CombatServiceConfig.HEALTH_ATTR_NAME)
+		local healthIsValid = AssertHelper.ExpectedValAssert(
+			typeof(health) == "number",
+			health,
+			"health",
+			"number"
+		)
+		if(not healthIsValid) then continue end
+		
+		if(health <= 0) then continue end
 		local barrel: BasePart? = turret:FindFirstChild("Barrel")
 		local barrelIsValid = typeof(barrel) == "Instance"
 			and barrel:IsA("BasePart")
@@ -250,11 +274,135 @@ local function SetTurretTargetFromMode(newMode: ModeConfig.Mode)
 	currentTeamsTargeted = targetedTeams
 end
 
+local function ExplodeTurret(turret: Model)
+	local turretIsValid = AssertHelper.InvalidArgAssert(
+		typeof(turret) == "Instance"
+			and turret:IsA("Model")
+		and CollectionService:HasTag(turret, TurretConfig.TURRET_TAG_NAME),
+		turret,
+		"turret",
+		"ExplodeTurret",
+		"Model"
+	)
+	if(not turretIsValid) then return end
+	
+	local turretPosition = turret:GetPivot().Position
+	
+	VfxService.SpawnExplosion({
+		BlastPressure = 0,
+		BlastRadius = 0,
+		DestroyJointRadiusPercent = 0,
+		ExplosionType = Enum.ExplosionType.NoCraters,
+		Position = turretPosition,
+		TimeScale = 1,
+		Visible = true
+	})
+end
+
+local function SpawnFireOnTurret(turret: Model)
+	local turretIsValid = AssertHelper.InvalidArgAssert(
+		typeof(turret) == "Instance"
+			and turret:IsA("Model"),
+		turret,
+		"turret",
+		"SpawnFireOnTurret",
+		"Model"
+	)
+	if(not turretIsValid) then return end
+	
+	local head = turret:FindFirstChild("Head")
+	local headIsValid = AssertHelper.ExpectedValAssert(
+		typeof(head) == "Instance"
+			and head:IsA("BasePart"),
+		head,
+		"head",
+		"BasePart"
+	)
+	if(not headIsValid) then return end
+	VfxService.SpawnFire({
+		Enabled = true,
+		TimeScale = 1,
+		Size = 8
+	}, head)
+end
+
+local function HandleTurretDamageRequested(turret: Model,
+	damageRequested: number
+)
+	local turretIsValid = AssertHelper.InvalidArgAssert(
+		typeof(turret) == "Instance"
+			and turret:IsA("Model"),
+		turret,
+		"turret",
+		"HandleTurretDamageRequested",
+		"Model"
+	)
+	if(not turretIsValid) then return end
+	
+	local damageRequestedIsValid = AssertHelper.InvalidArgAssert(
+		type(damageRequested) == "number",
+		damageRequested,
+		"damageRequested",
+		"HandleTurretDamageRequested",
+		"number"
+	)
+	if(not damageRequestedIsValid) then return end
+	
+	local currentHealth = turret:GetAttribute(CombatServiceConfig.HEALTH_ATTR_NAME)
+	local currentHealthIsValid = AssertHelper.ExpectedValAssert(
+		type(currentHealth) == "number",
+		currentHealth,
+		"currentHealth",
+		"number"
+	)
+	if(not currentHealthIsValid) then return end
+	
+	if(currentHealth == 0) then
+		return
+	end 
+	local currentMode = SystemManagerModule.GetGlobalGameState("CurrentMode")
+	if(not currentMode) then return end
+	if(currentMode ~= ModeConfig.modes.TurretOverride.Name) then return end
+	local health = CombatService.DamageDamageableObject(turret, damageRequested)
+	local healthIsValid = AssertHelper.ExpectedValAssert(
+		type(health) == "number",
+		health,
+		"health",
+		"number"
+	)
+	if(not healthIsValid) then return end
+
+	if(health == 0)	 then
+		ExplodeTurret(turret)
+		SpawnFireOnTurret(turret)
+		task.delay(TurretSystemConfig.TURRET_DOWNTIME, function()
+			VfxService.RemoveVfxOnInstance(turret)
+			local maxHealth = turret:GetAttribute(CombatServiceConfig.MAX_HEALTH_ATTR_NAME)
+			local maxHealthIsValid = AssertHelper.ExpectedValAssert(
+				type(maxHealth) == "number",
+				maxHealth,
+				"maxHealth",
+				"number"
+			)
+			if(not maxHealthIsValid) then return end
+			turret:SetAttribute(CombatServiceConfig.HEALTH_ATTR_NAME, maxHealth)
+		end)
+	end
+end
+
 
 function TurretSystem.Initialize()
-	--TODO: change target depednding on mode
 	FacilityModeSignals.ModeChanged:Connect(function(newMode: ModeConfig.Mode, oldMode: ModeConfig.Mode)
 		SetTurretTargetFromMode(newMode)
+	end)
+	
+	CombatServiceSignals.DamageableObjectDamageRequested:Connect(function(damageableObject: Instance, damageRequested: number)
+		local damageableObjectHasTurretTag = CollectionService:HasTag(
+			damageableObject,
+			TurretConfig.TURRET_TAG_NAME
+		)
+		if(not damageableObjectHasTurretTag) then return end
+		HandleTurretDamageRequested(damageableObject, damageRequested)
 	end)
 end
 

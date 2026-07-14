@@ -149,7 +149,9 @@ local function InitializeSelectionButtons(modes: {ModeConfig.Mode?})
 		local setup: boolean = SetupSelectionButton(clonedSelectionButton, mode)
 		if(not setup) then continue end
 		clonedSelectionButton.Activated:Connect(function(inputObject: InputObject, _)
+			SetFacilityModeSelectionVisibility(false)
 			submitModeVote:FireServer(mode)
+			
 		end)
 		clonedSelectionButton.Parent = modeSelectionButtons
 	end
@@ -198,6 +200,9 @@ local function TweenModeVoteTimeBar(modeVoteEndTime: number)
 		}
 	)
 	tween:Play()
+	tween.Completed:Connect(function(playbackState: Enum.PlaybackState)
+		SetFacilityModeSelectionVisibility(false)
+	end)
 end
 
 function FacilityModeUiSystem.Initialize()

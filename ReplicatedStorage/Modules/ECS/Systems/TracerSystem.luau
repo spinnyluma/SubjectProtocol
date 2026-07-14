@@ -7,37 +7,31 @@ local CframeHelper = require(ReplicatedStorage
 	.Cframe
 	.CframeHelper)
 
+local CombatService = require(ReplicatedStorage.Modules.Services.Combat.CombatService)
+
+local CombatServiceConfig = require(ReplicatedStorage.Modules.Services.Combat.CombatService.Config)
+
+local tracerTemplate = ReplicatedStorage.Assets.Ray.Templates.TracerTemplate
 
 local TracerSystem = {}
 
 function TracerSystem.Initialize()
-	replicateRayRE.OnClientEvent:Connect(function(originPart: BasePart,
-		endPosition: Vector3
+	replicateRayRE.OnClientEvent:Connect(function(tracerStartPart: BasePart,
+		endPosition: Vector3,
+		config: CombatServiceConfig.TracerParams
 	)
-		if(not originPart) then return end
+		if(not tracerStartPart) then return end
+		if(not endPosition) then return end
+		local tracerStartPosition: Vector3 = tracerStartPart.Position
+	
 		
-		local originPartPosition: Vector3 = originPart.Position
 		
-		local cframe1: CFrame = CFrame.new(originPartPosition)
-		local cframe2: CFrame = CFrame.new(endPosition)
+		CombatService.GenerateRay(tracerTemplate, tracerStartPart.Position,
+			endPosition, 
+			config
+		)
 		
-		local midCframe: CFrame? = CframeHelper.GetMidCframe(cframe1, cframe2)
-		if(not midCframe) then return end 
-		local part = Instance.new("Part")
-		part.Anchored = true
-		part.CanCollide = false
-		part.CanQuery = false
-		part.CanTouch = false
-		part.Transparency = 0.5
-		part.Material = Enum.Material.Neon
-		part.BrickColor = BrickColor.new("Bright red")
-		part.Parent = workspace
-		part.CFrame = CFrame.lookAt(midCframe.Position, endPosition)
-		
-		part.Size = Vector3.new(0.1, 0.1, (originPartPosition - endPosition).Magnitude)
-		task.delay(0.1, function()
-			part:Destroy()
-		end)	
+	
 	end)
 end
 

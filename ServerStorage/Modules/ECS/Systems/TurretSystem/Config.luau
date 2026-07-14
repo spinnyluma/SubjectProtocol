@@ -8,9 +8,12 @@ local Config = {}
 
 Config.TURRET_DAMAGE = 10
 
+
+Config.TURRET_DOWNTIME = 30
+
 Config.modeToTurretTargetedTeams = {
 	[ModeConfig.modes.Idle.Name] = {},
-	[ModeConfig.modes.TurretOverride.Name] = {TeamConfig.teams.Subjects.Team}
+	[ModeConfig.modes.TurretOverride.Name] = {TeamConfig.teams.Guards.Team}
 }
 
 return Config
