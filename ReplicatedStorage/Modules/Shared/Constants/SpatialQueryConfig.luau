@@ -11,6 +11,9 @@ local overlapParamsPresets = {
 	},
 	T_Terminal = {
 		ExcludeInstances = {"Self"}
+	},
+	T_Experiment = {
+		ExcludeInstances = {"Self"}
 	}
 }
 
@@ -227,7 +230,7 @@ function SpatialQueryConfig.GetRaycastParams(presetKey: string, config: {[string
 		type(presetKey) == "string",
 		presetKey,
 		"presetKey",
-		"GetTurretRaycastParams",
+		"SpatialQueryConfig.GetRaycastParams",
 		"string"
 	)
 	if(not presetKeyIsValid) then return end
@@ -236,13 +239,36 @@ function SpatialQueryConfig.GetRaycastParams(presetKey: string, config: {[string
 		type(config) == "table",
 		config,
 		"config",
-		"GetTurretRaycastParams",
+		"SpatialQueryConfig.GetRaycastParams",
 		"table"
 	)
 	if(not configIsValid) then return end
 	
 	local raycastParams = GetRaycastParams(presetKey, config)
 	return raycastParams
+end
+
+function SpatialQueryConfig.GetOverlapParams(presetKey: string, config: {[string]: any})
+	local presetKeyIsValid: boolean? = AssertHelper.InvalidArgAssert(
+		type(presetKey) == "string",
+		presetKey,
+		"presetKey",
+		"SpatialQueryConfig.GetOverlapParams",
+		"string"
+	)
+	if(not presetKeyIsValid) then return end
+	
+	local configIsValid: boolean? = AssertHelper.InvalidArgAssert(
+		type(config) == "table",
+		config,
+		"config",
+		"SpatialQueryConfig.GetOverlapParams",
+		"table"
+	)
+	if(not configIsValid) then return end
+	
+	local overlapParams = GetOverlapParams(presetKey, config)
+	return overlapParams
 end
 
 function SpatialQueryConfig.GetConfigKeys(presetKey: string): {string?}?
