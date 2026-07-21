@@ -74,18 +74,31 @@ TerminalConfig.teamsToContestStateMap = {
 	[TeamConfig.teams.Subjects.Team] = TerminalConfig.terminalContestStates.SubjectsContesting.Name
 }
 
-TerminalConfig.terminalContestTimeStates = {
-	TerminalTimeMaxReached = {
-		Name = "TerminalTimeMaxReached",
+TerminalConfig.terminalCaptureTimeStates = {
+	TerminalCaptureTimeMaxReached = {
+		Name = "TerminalCaptureTimeMaxReached",
 		Value = 0
 	},
-	TerminalTimeMinReached = {
-		Name = "TerminalTimeMinReached",
+	TerminalCaptureTimeMinReached = {
+		Name = "TerminalCaptureTimeMinReached",
+		Value = 1
+	}
+}
+
+TerminalConfig.terminalOwnerCaptureTimeStates = {
+	TimeMaxReached = {
+		Name = "TimeMaxReached",
+		Value = 0
+	},
+	TimeMinReached = {
+		Name = "TimeMinReached",
 		Value = 1
 	}
 }
 
 
-TerminalConfig.TIME_TO_CAPTURE = 2
 
+
+TerminalConfig.TIME_TO_CAPTURE = 2
+TerminalConfig.TIME_TO_OWN_TERMINAL = 10
 return TerminalConfig

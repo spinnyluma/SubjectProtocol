@@ -359,13 +359,11 @@ function FacilityModeSystem.Initialize()
 		
 		AddVoteToCurrentVotes(player, votedMode)
 	end)
-	TerminalSignals.TerminalOwnerChanged:Connect(function(terminalOwner: Team, oldTerminalOwner: Team)
-		if(terminalOwner ~= oldTerminalOwner) then
-			voteOccurredForCurrentSubjectCapture = false
-		end
-		
+	
+	TerminalSignals.TerminalOwnerCaptureTimeMaxReached:Connect(function()
+
 		if(voteOccurredForCurrentSubjectCapture) then return end
-		
+
 		local facilityModeCooldown = SystemManagerModule.GetGlobalGameState("ModeVoteCooldown")
 		local facilityModeCooldownIsValid = AssertHelper.ExpectedValAssert(
 			type(facilityModeCooldown) == "number",
@@ -374,35 +372,23 @@ function FacilityModeSystem.Initialize()
 			"number"
 		)
 		if(not facilityModeCooldownIsValid) then return end
-		if(terminalOwner == TeamConfig.teams.Subjects.Team) then
-			if(facilityModeCooldown == 0) then
-				SetupOnModeVoteVariables()
-				ReplicateReplicaToSubjects()
-				InitializeModeVoteProcess()	
-			else
-				local voteCooldownEndedSuccess = TimeHelper.CreateCountdownInSeconds(FacilityModeConfig.MODE_COOLDOWN)
-				local currentTerminalOwner = SystemManagerModule.GetGlobalGameState("TerminalOwner")
-				local currentTerminalOwnerIsValid = AssertHelper.ExpectedValAssert(
-					typeof(currentTerminalOwner) == "Instance"
-						and currentTerminalOwner:IsA("Team"),
-					currentTerminalOwner,
-					"currentTerminalOwner",
-					"TerminalOwner",
-					"Team"
-				)
-				if(not currentTerminalOwnerIsValid) then return end
-				
-				SetupOnModeVoteVariables()
-				ReplicateReplicaToSubjects()
-				InitializeModeVoteProcess()
-			end
-		end
-	end)
-	TerminalSignals.ModeVoteAvailable:Connect(function()
-		
+		voteOccurredForCurrentSubjectCapture = true
 
-	end)
+		
+		if(facilityModeCooldown == 0) then
+			SetupOnModeVoteVariables()
+			ReplicateReplicaToSubjects()
+			InitializeModeVoteProcess()	
+		else
+			local voteCooldownEndedSuccess = TimeHelper.CreateCountdownInSeconds(FacilityModeConfig.MODE_COOLDOWN)
+			
+
+			SetupOnModeVoteVariables()
+			ReplicateReplicaToSubjects()
+			InitializeModeVoteProcess()
+		end
 	
+	end)
 end
 
 return FacilityModeSystem

@@ -4,7 +4,10 @@ local Promise = require(ReplicatedStorage.Modules.Utilities.Promise)
 
 local AssertHelper = require(ReplicatedStorage.Modules.Helpers.Debug.AssertHelper)
 
+local TimeConfig = require(script.Config)
+
 local TimeHelper = {}
+
 
 --[[
 	Counts down until a number of seconds is elapsed.
@@ -37,11 +40,15 @@ function TimeHelper.CreateCountdownInSeconds(numberOfSeconds: number, callbackOn
 	
 	local endTime = os.clock() + numberOfSeconds
 	
-	while (os.clock() < endTime) do
+	local currentTime = os.clock()
+	while (currentTime < endTime) do
 		if(callbackOnTick) then
-			callbackOnTick()
+			local timeRemaining = endTime - currentTime
+			local timeElapsed = numberOfSeconds - timeRemaining
+			callbackOnTick(timeElapsed)
 		end
 		task.wait()
+		currentTime = os.clock()
 	end
 	
 	return true

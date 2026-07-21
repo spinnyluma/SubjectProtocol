@@ -57,6 +57,21 @@ function PlayerHelper.GetPlayerIntersectCharOverlapParams()
 	return PlayerHelperConstants._playerIntersectCharOverlapParams
 end
 
-
+function PlayerHelper.IsPlayerInServer(player: Player): boolean
+	local playerIsValid = AssertHelper.InvalidArgAssert(
+		typeof(player) == "Instance"
+		and player:IsA("Player"),
+		player,
+		"player",
+		"IsPlayerInServer",
+		"Player"
+	)
+	if not playerIsValid then return end
+	
+	local players = Players:GetPlayers()
+	
+	local playerInServerIndex = table.find(players, player)
+	return playerInServerIndex ~= nil
+end
 
 return PlayerHelper

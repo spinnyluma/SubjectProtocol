@@ -23,8 +23,23 @@ local function ApplySlide(player: Player)
 	startClientExperimentRE:FireClient(player, "Slide")
 end
 
+local function ApplyStumble(player: Player)
+	local playerIsValid = AssertHelper.InvalidArgAssert(
+		typeof(player) == "Instance"
+		and player:IsA("Player"),
+		player,
+		"player",
+		"ApplyStumble",
+		"Player"
+	)
+	if not playerIsValid then return end
+	
+	startClientExperimentRE:FireClient(player, "Stumble")
+end
+
 local experimentHandlers = {
-	["Slide"] = ApplySlide
+	["Slide"] = ApplySlide,
+	["Stumble"] = ApplyStumble
 }
 
 function ExperimentHandlers.ExecuteExperimentByType(player: Player, experimentType: string)

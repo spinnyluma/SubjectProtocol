@@ -9,7 +9,8 @@ local Players = game:GetService("Players")
 local AssertHelper = require(ReplicatedStorage.Modules.Helpers.Debug.AssertHelper)
 local DataModelHelper = require(ReplicatedStorage.Modules.Helpers.DataModel.DataModelHelper)
 
-local ExperimentConfig = require(script.Config)
+local ExperimentSystemConfig = require(script.Config)
+local ExperimentConfig = require(ReplicatedStorage.Modules.Shared.Constants.ExperimentConfig)
 local SpatialQueryConfig = require(ReplicatedStorage.Modules.Shared.Constants.SpatialQueryConfig)
 local PlayerConfig = require(ServerStorage.Modules.ECS.Systems.PlayerSystem.Config)
 local TeamConfig = require(ReplicatedStorage.Modules.Shared.Constants.TeamConfig)
@@ -25,20 +26,7 @@ local SystemManagerModule = require(ReplicatedStorage.Modules.ECS.SystemManagerM
 
 local ExperimentSystem = {}
 
-local function InitializeExperimentSystemComponent(experimentMachine: Model)
-	local experimentMachineIsValid = AssertHelper.InvalidArgAssert(
-		typeof(experimentMachine) == "Instance"
-		and experimentMachine:IsA("Model"),
-		experimentMachine,
-		"experimentMachine",
-		"InitializeExperimentSystemComponent",
-		"Model"
-	)
-	if not experimentMachineIsValid then return end
-	
-	SystemManagerModule.AddComponent("ExperimentMachine", experimentMachine)
-	
-end
+
 
 local function GetExperimentablePlayersFromParts(parts: {BasePart?})
 	local partsIsValid = AssertHelper.InvalidArgAssert(
@@ -69,27 +57,44 @@ local function GetExperimentablePlayersFromParts(parts: {BasePart?})
 	return players
 end
 
-local function ApplyExperimentToPlayer(player: Player, experimentType: string)
-	local playerIsValid = AssertHelper.InvalidArgAssert(
-		typeof(player) == "Instance"
-		and player:IsA("Player"),
-		player,
-		"player",
-		"ApplyExperimentToPlayer",
-		"Player"
+local function SetExperimentMachineDoorState(experimentMachine: Model, visible: boolean)
+	local experimentMachineIsValid = AssertHelper.InvalidArgAssert(
+		typeof(experimentMachine) == "Instance"
+		and experimentMachine:IsA("Model"),
+		experimentMachine,
+		"experimentMachine",
+		"SetExperimentMachineDoorState",
+		"Model"
 	)
-	if not playerIsValid then return end
+	if not experimentMachineIsValid then return end
 	
-	local experimentTypeIsValid = AssertHelper.InvalidArgAssert(
-		typeof(experimentType) == "string",
-		experimentType,
-		"experimentType",
-		"ApplyExperimentToPlayer",
-		"string"
+	local visibleIsValid = AssertHelper.InvalidArgAssert(
+		typeof(visible) == "boolean",
+		visible,
+		"visible",
+		"SetExperimentMachineDoorState",
+		"boolean"
 	)
-	if not experimentTypeIsValid then return end
+	if not visibleIsValid then return end
 	
+	local door = experimentMachine.Door
+	local doorIsValid = AssertHelper.ExpectedValAssert(
+		typeof(door) == "Instance"
+		and door:IsA("BasePart"),
+		door,
+		"door",
+		"BasePart"
+	)
+	if not doorIsValid then return end
 	
+	local newTransparency = 0
+	if(visible) then
+		newTransparency = 0
+	else
+		newTransparency = 1
+	end
+	door.Transparency = newTransparency
+	door.CanCollide = visible
 	
 end
 
@@ -104,18 +109,17 @@ local function OperateExperimentMachine(experimentMachine: Model)
 	)
 	if not experimentMachineIsValid then return end
 	
-	local experimentMachineComponent = SystemManagerModule.GetComponentByEntity("ExperimentMachine", experimentMachine)
-	local experimentMachineComponentIsValid = AssertHelper.ExpectedValAssert(
-		typeof(experimentMachineComponent) == "table",
-		experimentMachineComponent,
-		"experimentMachineComponent",
-		"table"
+	local experimentOperating: boolean? = experimentMachine:GetAttribute(ExperimentConfig.EXPERIMENT_OPERATING_ATTR_NAME)
+	local experimentOperatingIsValid = AssertHelper.ExpectedValAssert(
+		type(experimentOperating) == "boolean",
+		experimentOperating,
+		"experimentOperating",
+		"boolean"
 	)
-	if not experimentMachineComponentIsValid then return end
+	if not experimentOperatingIsValid then return end
 	
-	experimentMachineComponent.Operating = true
-	
-	local experimentType = experimentMachine:GetAttribute(ExperimentConfig.EXPERIMENT_TYPE_ATTR_NAME)
+	if(experimentOperating) then return end
+	local experimentType = experimentMachine:GetAttribute(ExperimentSystemConfig.EXPERIMENT_TYPE_ATTR_NAME)
 	local experimentTypeIsValid = AssertHelper.ExpectedValAssert(
 		typeof(experimentType) == "string",
 		experimentType,
@@ -123,7 +127,6 @@ local function OperateExperimentMachine(experimentMachine: Model)
 		"string"
 	)
 	if not experimentTypeIsValid then return end
-	
 	
 	local origin = experimentMachine.Origin
 	local originIsValid = AssertHelper.ExpectedValAssert(
@@ -135,33 +138,41 @@ local function OperateExperimentMachine(experimentMachine: Model)
 	)
 	if not originIsValid then return end
 	
+	
+	
 	local originCFrame = origin.CFrame
 	local originSize = origin.Size
 	
-	local overlapParams = SpatialQueryConfig.GetOverlapParams(ExperimentConfig.SYSTEM_TAG_NAME, {
+	local overlapParams = SpatialQueryConfig.GetOverlapParams(ExperimentConfig.EXPERIMENT_MACHINE_TAG_NAME, {
 		["Self"] = experimentMachine
 	})
 	local parts = workspace:GetPartBoundsInBox(origin.CFrame,
 		originSize,
 		overlapParams
 	)
+
 	local players: {Player?} = GetExperimentablePlayersFromParts(parts)
 	if(not players) then return end
 	
-	for _, player in players do
-		ExperimentHandlers.ExecuteExperimentByType(player, experimentType)
+	if(#players > 0) then
+		experimentMachine:SetAttribute(ExperimentSystemConfig.EXPERIMENT_OPERATING_ATTR_NAME, true)
+			SetExperimentMachineDoorState(experimentMachine, true)
 	end
+	
+	task.delay(5, function()
+		for _, player in players do
+			ExperimentHandlers.ExecuteExperimentByType(player, experimentType)
+		end
+		experimentMachine:SetAttribute(ExperimentConfig.EXPERIMENT_OPERATING_ATTR_NAME, false)
+		SetExperimentMachineDoorState(experimentMachine, false)
+	end)
+	
+	
 end
 
 local function InitializeExperimentSystems()
-	local experimentMachines = CollectionService:GetTagged(ExperimentConfig.SYSTEM_TAG_NAME)
-	
-	for _, experimentMachine in experimentMachines do
-		InitializeExperimentSystemComponent(experimentMachine)
-	end
-	
 	ProximityPromptService.PromptTriggered:Connect(function(prompt: ProximityPrompt, playerWhoTriggered: Player)
-		local parent = DataModelHelper.GetRootParentWithTag(prompt, ExperimentConfig.SYSTEM_TAG_NAME)
+		local parent = DataModelHelper.GetRootParentWithTag(prompt, ExperimentConfig.EXPERIMENT_MACHINE_TAG_NAME)
 		if(parent) then
 			OperateExperimentMachine(parent)
 		end	

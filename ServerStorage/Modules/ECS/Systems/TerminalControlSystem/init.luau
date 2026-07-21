@@ -18,8 +18,11 @@ local FacilityModeConfig = require(ServerStorage.Modules.ECS.Systems.FacilityMod
 local SystemManagerModule = require(ReplicatedStorage.Modules.ECS.SystemManagerModule)
 local TerminalSignals = require(script.Signals)
 
+local TimeHelper = require(ReplicatedStorage.Modules.Helpers.Time.TimeHelper)
+
 local Replica = require(ServerStorage.Modules.Utilities.ReplicaServer)
 local Trove = require(ReplicatedStorage.Modules.Utilities.Trove)
+local Promise = require(ReplicatedStorage.Modules.Utilities.Promise)
 
 local TerminalControlSystem = {}
 
@@ -30,19 +33,21 @@ local terminalOwner: Team = TeamConfig.teams.Guards.Team
 
 local currentTerminalContestTime = 0
 local contestingConnection: RBXScriptConnection? = nil
-
+local currentTerminalOwnerCaptureTime = 0
 
 local cooldownDecrementConnection: RBXScriptConnection? = nil
 
-
+local terminalOwnerTimePromise = nil
 
 local terminalReplica = Replica.New({
 	Token = Replica.Token(ReplicaConfig.replicaTokens.Terminal.Name),
 	Data = {
-		TerminalTime = currentTerminalContestTime,
+		TerminalCaptureTime = currentTerminalContestTime,
+		TerminalOwnerCaptureTime = currentTerminalOwnerCaptureTime,
 		TerminalOwner = TeamConfig.teams.Guards.Team,
 		TerminalContestState = TerminalConfig.terminalContestStates.Uncontested.Name,
-		TeamsOnTerminalState = TerminalConfig.teamsOnTerminalStates.NoTeamsOnTerminal.Name
+		TeamsOnTerminalState = TerminalConfig.teamsOnTerminalStates.NoTeamsOnTerminal.Name,
+		TerminalOwnerMaxTimeReached = false,
 	}
 })
 
@@ -95,19 +100,40 @@ end
 	@returns boolean Returns true if the new contest time set was more or equal than the limit of Terminal.TIME_TO_CAPTURE
 	and false if the new time set was less than 0.
 ]]
-local function SetTerminalContestTime(newContestTime: number): boolean?
+local function SetTerminalCaptureTime(newContestTime: number): boolean?
 	currentTerminalContestTime = newContestTime
-	terminalReplica:Set({"TerminalTime"}, currentTerminalContestTime)
 	if(currentTerminalContestTime >= TerminalConfig.TIME_TO_CAPTURE) then
-		return TerminalConfig.terminalContestTimeStates.TerminalTimeMaxReached.Name
+		return TerminalConfig.terminalCaptureTimeStates.TerminalCaptureTimeMaxReached.Name
 	end 
 	
+	terminalReplica:Set({"TerminalCaptureTime"}, newContestTime)
 	if(currentTerminalContestTime <= 0) then
-		return TerminalConfig.terminalContestTimeStates.TerminalTimeMinReached.Name
+		return TerminalConfig.terminalCaptureTimeStates.TerminalCaptureTimeMinReached.Name
 	end
 	return nil
 end
 
+local function SetTerminalOwnerCaptureTime(newTerminalOwnerCaptureTime: number)
+	local newTerminalOwnerCaptureTimeIsValid = AssertHelper.InvalidArgAssert(
+		type(newTerminalOwnerCaptureTime) == "number",
+		newTerminalOwnerCaptureTime,
+		"newTerminalOwnerCaptureTime",
+		"SetTerminalOwnerCaptureTime",
+		"number"
+	)
+	if(not newTerminalOwnerCaptureTimeIsValid) then return end
+	
+	currentTerminalOwnerCaptureTime = newTerminalOwnerCaptureTime
+	if(currentTerminalContestTime >= TerminalConfig.TIME_TO_OWN_TERMINAL) then
+		return TerminalConfig.terminalOwnerCaptureTimeStates.TimeMaxReached.Name
+	end
+	terminalReplica:Set({"TerminalOwnerCaptureTime"}, newTerminalOwnerCaptureTime)
+	
+	if(currentTerminalContestTime <= 0) then
+		return TerminalConfig.terminalOwnerCaptureTimeStates.TimeMinReached.Name
+	end
+	return nil
+end
 
 local function SetTerminalContestState(newContestState: TerminalConfig.TerminalContestState)
 	local newContestStateIsValid = AssertHelper.InvalidArgAssert(
@@ -137,6 +163,13 @@ local function SetTeamsOnTerminalState(newTeamsOnTerminalState: TerminalConfig.T
 	terminalReplica:Set({"TeamsOnTerminalState"}, newTeamsOnTerminalState)
 end
 
+local function CancelTerminalOwnerTimePromise()
+	if(terminalOwnerTimePromise) then
+		terminalOwnerTimePromise:cancel()
+		terminalOwnerTimePromise = nil
+	end
+end
+
 local function SetTerminalOwner(newTerminalOwner: Team)
 	local newTerminalOwnerIsValid = AssertHelper.InvalidArgAssert(
 		typeof(newTerminalOwner) == "Instance"
@@ -153,11 +186,11 @@ local function SetTerminalOwner(newTerminalOwner: Team)
 	
 	if(oldTerminalOwner ~= terminalOwner) then
 		SystemManagerModule.SetGlobalGameState("TerminalOwner", newTerminalOwner)
-
+		
 		TerminalSignals.TerminalOwnerChanged:Fire(terminalOwner, oldTerminalOwner)
-					
+		CancelTerminalOwnerTimePromise()
+		terminalReplica:Set({"TerminalOwnerMaxTimeReached"}, false)
 	end
-	
 	terminalReplica:Set({"TerminalOwner"}, newTerminalOwner)
 	
 	
@@ -165,11 +198,27 @@ end
 
 
 local function ResetTerminalState()
-	SetTerminalContestTime(0)
+	SetTerminalCaptureTime(0)
 	SetTerminalContestState(TerminalConfig.terminalContestStates.Uncontested.Name)
 end
 
 
+
+local function PerformTerminalOwnerCaptureCountdown()
+
+	terminalOwnerTimePromise = Promise.try(function()
+		TimeHelper.CreateCountdownInSeconds(TerminalConfig.TIME_TO_OWN_TERMINAL, function(timeElapsed: number)
+			SetTerminalOwnerCaptureTime(timeElapsed)		
+		end)
+	end)
+	terminalOwnerTimePromise:andThen(function()
+		TerminalSignals.TerminalOwnerCaptureTimeMaxReached:Fire()
+		terminalReplica:Set({"TerminalOwnerMaxTimeReached"}, true)
+	end)
+		:catch(function(errorMsg)
+			AssertHelper.Warn(tostring(errorMsg))
+		end)
+end
 
 local function AddTerminalContestStateThread(newContestingTeam: Team)
 	local newContestingTeamIsValid = AssertHelper.InvalidArgAssert(
@@ -197,18 +246,25 @@ local function AddTerminalContestStateThread(newContestingTeam: Team)
 		SetTerminalContestState(contestState)
 		
 		contestingConnection = RunService.Heartbeat:Connect(function(deltaTime: number)
-			local contestTimeState: boolean? = SetTerminalContestTime(
+			local contestTimeState: boolean? = SetTerminalCaptureTime(
 				currentTerminalContestTime + deltaTime
 			)
 			
-			if(contestTimeState ~= TerminalConfig.terminalContestTimeStates.TerminalTimeMaxReached.Name) then
+			if(contestTimeState ~= TerminalConfig.terminalCaptureTimeStates.TerminalCaptureTimeMaxReached.Name) then
 				return
 			end
 			SetTerminalOwner(newContestingTeam)
-
+			
+			
 			ResetTerminalState()
-			contestingConnection:Disconnect()				
+			contestingConnection:Disconnect()
+			print("subjects have captured the terminal!! now counting down the terminal owner")
+			CancelTerminalOwnerTimePromise()
+			if(terminalOwner == TeamConfig.teams.Subjects.Team) then
+				PerformTerminalOwnerCaptureCountdown()
+			end
 		end)
+		
 	else
 		
 		local currentContestingTeam: {[string]: any}? = TerminalConfig.contestStateToTeamsMap[currentTerminalContestState]
@@ -234,10 +290,10 @@ local function AddTerminalContestStateThread(newContestingTeam: Team)
 		
 		if(currentContestingTeam == newContestingTeam) then
 			contestingConnection = RunService.Heartbeat:Connect(function(deltaTime: number)
-				local contestTimeState: boolean? = SetTerminalContestTime(
+				local contestTimeState: boolean? = SetTerminalCaptureTime(
 					currentTerminalContestTime + deltaTime
 				)
-				if(contestTimeState ~= TerminalConfig.terminalContestTimeStates.TerminalTimeMaxReached.Name) then
+				if(contestTimeState ~= TerminalConfig.terminalCaptureTimeStates.TerminalCaptureTimeMaxReached.Name) then
 					return
 				end
 				SetTerminalOwner(newContestingTeam)
@@ -246,6 +302,10 @@ local function AddTerminalContestStateThread(newContestingTeam: Team)
 				if(contestingConnection ~= nil
 					and contestingConnection.Connected) then 
 					contestingConnection:Disconnect()
+				end
+				CancelTerminalOwnerTimePromise()
+				if(terminalOwner == TeamConfig.teams.Subjects.Team) then
+					PerformTerminalOwnerCaptureCountdown()
 				end
 			end)
 		else
@@ -259,17 +319,17 @@ local function AddTerminalContestStateThread(newContestingTeam: Team)
 			if(not newContestingTeamContestStateIsValid) then return end
 			
 			contestingConnection = RunService.Heartbeat:Connect(function(deltaTime: number)
-				local contestTimeState: boolean? = SetTerminalContestTime(
+				local contestTimeState: boolean? = SetTerminalCaptureTime(
 					currentTerminalContestTime - deltaTime
 				)
-				if(contestTimeState ~= TerminalConfig.terminalContestTimeStates.TerminalTimeMinReached.Name) then
+				if(contestTimeState ~= TerminalConfig.terminalCaptureTimeStates.TerminalCaptureTimeMinReached.Name) then
 					return
 				end
 				if(contestingConnection ~= nil
 					and contestingConnection.Connected) then
 					contestingConnection:Disconnect()
 				end
-				SetTerminalContestTime(0)
+				SetTerminalCaptureTime(0)
 				
 				if(terminalOwner == newContestingTeam) then
 					SetTerminalContestState(TerminalConfig.terminalContestStates.Uncontested.Name)
@@ -282,10 +342,10 @@ local function AddTerminalContestStateThread(newContestingTeam: Team)
 					]]
 					SetTerminalContestState(newContestingTeamContestState)
 					contestingConnection = RunService.Heartbeat:Connect(function(increaseDeltaTime: number)
-						local contestTimeState: boolean? = SetTerminalContestTime(
+						local contestTimeState: boolean? = SetTerminalCaptureTime(
 							currentTerminalContestTime + increaseDeltaTime
 						)
-						if(contestTimeState ~= TerminalConfig.terminalContestTimeStates.TerminalTimeMaxReached.Name) then
+						if(contestTimeState ~= TerminalConfig.terminalCaptureTimeStates.TerminalCaptureTimeMaxReached.Name) then
 							return
 						end
 						SetTerminalOwner(newContestingTeam)
@@ -294,6 +354,10 @@ local function AddTerminalContestStateThread(newContestingTeam: Team)
 						if(contestingConnection ~= nil
 							and contestingConnection.Connected) then
 							contestingConnection:Disconnect()
+						end
+						CancelTerminalOwnerTimePromise()
+						if(terminalOwner == TeamConfig.teams.Subjects.Team) then
+							PerformTerminalOwnerCaptureCountdown()
 						end
 					end)
 				end
@@ -357,6 +421,14 @@ local function HandleTerminalControlSystem(proximityInteractionType: string,
 
 	end
 	
+	if(teamsOnTerminalState == TerminalConfig.teamsOnTerminalStates.NoTeamsOnTerminal.Name) then
+		SetTerminalContestState(TerminalConfig.terminalContestStates.Uncontested.Name)
+	end
+	--[[
+		If there are multiple teams or no teams on the terminal,
+		don't increase the contest time because the terminal is either being contested
+		by multiple teams or there are no players on the terminal
+	]]
 	if(teamsOnTerminalState == TerminalConfig.teamsOnTerminalStates.NumberOfTeamsOnTerminal.Name
 		or teamsOnTerminalState == TerminalConfig.teamsOnTerminalStates.NoTeamsOnTerminal.Name) then
 		if(typeof(contestingConnection) ~= "RBXScriptConnection") then return end
@@ -367,10 +439,18 @@ local function HandleTerminalControlSystem(proximityInteractionType: string,
 	if(not teamFromControlType) then return end
 	if(teamFromControlType == terminalOwner
 		and teamsOnTerminalState == TerminalConfig.teamsOnTerminalStates.NoTeamsOnTerminal.Name) then
+		
 		return
 	end
+	--[[
+		Prevent players from capturing terminal
+		if they are the current terminal owner
+		and if the terminal is also uncontested
+		because there is no need for them to capture the terminal.
+	]]
 	if(teamFromControlType == terminalOwner
 		and currentTerminalContestState == TerminalConfig.terminalContestStates.Uncontested.Name) then 
+		
 		return 
 	end
 	--[[
@@ -398,7 +478,6 @@ function TerminalControlSystem.Initialize()
 			HandleTerminalControlSystem(proximityInteractionType, querySource, instancesFound)
 		end
 	end)
-	
 	terminalReplica:Replicate()
 end
 

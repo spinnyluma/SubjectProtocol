@@ -4,7 +4,8 @@ local TweenService = game:GetService("TweenService")
 
 local AssertHelper = require(ReplicatedStorage.Modules.Helpers.Debug.AssertHelper)
 local Replica = require(ReplicatedStorage.Modules.Utilities.ReplicaClient)
-
+local Trove = require(ReplicatedStorage.Modules.Utilities.Trove)
+-- TROVE!!! means i need to store tween of capture time text and check if it is playing so i need to cancel it when setting capture time text visibility
 local ReplicaConfig = require(ReplicatedStorage.Modules.Shared.Constants.ReplicaConfig)
 local TerminalConfig = require(ReplicatedStorage.Modules.Shared.Constants.TerminalConfig)
 local TeamConfig = require(ReplicatedStorage.Modules.Shared.Constants.TeamConfig)
@@ -48,19 +49,21 @@ local function InitializeUiElements()
 	terminalOwner = playerGui:WaitForChild("TerminalOwner")
 	terminalOwnerContainer = terminalOwner:WaitForChild("TerminalOwnerContainer")
 	terminalCaptureText = terminalOwnerContainer:WaitForChild("TerminalCaptureText")
-	terminalOwnerTimeText = terminalOwnerContainer:WaitForChild("TerminalOwnerTimeText")
 	terminalOwnerText = terminalOwnerContainer:WaitForChild("TerminalOwnerText")
 	terminalFillbarContainer = terminalOwnerContainer:WaitForChild("TerminalFillbarContainer")
+	
+	terminalOwnerTimeText = terminalFillbarContainer:WaitForChild("TerminalOwnerTimeText")
+	
 	terminalFillbar = terminalFillbarContainer:WaitForChild("TerminalFillbar")
 			
 end
 
-local function SetTerminalTime(terminalTime: number)
+local function SetTerminalOwnerCaptureTime(terminalTime: number)
 	local terminalTimeIsValid = AssertHelper.InvalidArgAssert(
 		type(terminalTime) == "number",
 		terminalTime,
 		"terminalTime",
-		"SetTerminalTime",
+		"SetTerminalOwnerCaptureTime",
 		"number"
 	)
 	
@@ -69,9 +72,10 @@ local function SetTerminalTime(terminalTime: number)
 	end
 	
 	if(not terminalCaptureText) then return end
-	local formattedTime: string = string.format("%i", terminalTime)
+	local terminalTimeRounded = math.round(terminalTime)
+	local formattedTime: string = string.format("%i", terminalTimeRounded)
 	
-	terminalOwnerTimeText.Text = formattedTime .. `/{TerminalConfig.TIME_TO_CAPTURE}`
+	terminalOwnerTimeText.Text = formattedTime .. `/{TerminalConfig.TIME_TO_OWN_TERMINAL}`
 end
 
 local function SetFillbarContainerScale(newValue: number)
@@ -144,7 +148,7 @@ local function SetTerminalOwnerMessage(terminalOwner: Team)
 	terminalOwnerText.Text = newTerminalOwnerText
 end
 
-local function SetTerminalSecondaryInfoVisibility(isVisible: boolean)
+local function SetTerminalCaptureTextVisibility(isVisible: boolean)
 	local isVisibleIsValid = AssertHelper.InvalidArgAssert(
 		type(isVisible) == "boolean",
 		isVisible,
@@ -167,17 +171,8 @@ local function SetTerminalSecondaryInfoVisibility(isVisible: boolean)
 	else
 		transparency = 1
 	end
-	local transparencyIsValid = AssertHelper.ExpectedValAssert(
-		type(transparency) == "number",
-		transparency,
-		"transparency",
-		"TweenTerminalSecondaryInfoVisibility",
-		"number"
-	)
-	
-	if(not transparencyIsValid) then return end
 	terminalCaptureText.TextTransparency = transparency
-	terminalFillbarContainer.GroupTransparency = transparency
+	--terminalFillbarContainer.GroupTransparency = transparency
 end
 
 local function SetTerminalTimeVisibility(isVisible: boolean)
@@ -205,7 +200,7 @@ local function SetTerminalTimeVisibility(isVisible: boolean)
 	terminalOwnerTimeText.TextTransparency = transparency
 end
 
-local function TweenTerminalSecondaryInfoVisibility(isVisible: boolean)
+local function TweenTerminalCaptureTextVisibility(isVisible: boolean)
 	local isVisibleIsValid = AssertHelper.InvalidArgAssert(
 		type(isVisible) == "boolean",
 		isVisible,
@@ -241,23 +236,8 @@ local function TweenTerminalSecondaryInfoVisibility(isVisible: boolean)
 			TextTransparency = transparency
 		}
 	)
-	
-	local fillbarTransparencyTween = TweenService:Create(terminalFillbarContainer,
-		tweenInfoUsed,
-		{
-			GroupTransparency = transparency
-		}
-	)
-	local ownerTimeTextTween = TweenService:Create(terminalOwnerTimeText,
-		tweenInfoUsed,
-		{
-			TextTransparency = transparency
-		}
-	)
-	
-	ownerTimeTextTween:Play()
 	captureTextTransparencyTween:Play()
-	fillbarTransparencyTween:Play()
+	print("playing tween")
 end
 
 local function TweenTerminalOwnerTimeTextVisibility(isVisible: boolean)
@@ -292,25 +272,76 @@ local function TweenTerminalOwnerTimeTextVisibility(isVisible: boolean)
 	)
 	tween:Play()
 end
+
+local function TweenTerminalFillbarVisibility(isVisible: boolean)
+	local isVisibleIsValid = AssertHelper.InvalidArgAssert(
+		type(isVisible) == "boolean",
+		isVisible,
+		"isVisible",
+		"TweenTerminalFillbarVisibility",
+		"boolean"
+	)
+	
+	if(not isVisibleIsValid) then return end
+	
+	local transparency = 0
+	if(not isVisible) then
+		transparency = 1
+	end
+	
+	local tweenInfoUsed: TweenInfo? = nil
+	
+	if(not isVisible) then
+		tweenInfoUsed = terminalUiDisappearTweenInfo
+	else
+		tweenInfoUsed = terminalUiAppearTweenInfo
+	end
+	
+	local tween = TweenService:Create(terminalFillbarContainer,
+		tweenInfoUsed,
+		{
+			GroupTransparency = transparency
+		}
+	)
+	tween:Play()
+end
+
+local function SetTerminalFillbarVisibility(isVisible: boolean)
+	local isVisibleIsValid = AssertHelper.InvalidArgAssert(
+		type(isVisible) == "boolean",
+		isVisible,
+		"isVisible",
+		"SetTerminalFillbarVisibility",
+		"boolean"
+	)
+	
+	if(not isVisibleIsValid) then return end
+	
+	if(not terminalFillbarContainer) then return end
+	
+	local transparency = 0
+	if(not isVisible) then
+		transparency = 1
+	end
+	
+	terminalFillbarContainer.GroupTransparency = transparency
+end
 function TerminalUiSystem.Initialize()
 	InitializeUiElements()
 	
 	Replica.OnNew(ReplicaConfig.replicaTokens.Terminal.Name, function(replica)
 		local data = replica.Data
-		local terminalTime = data["TerminalTime"]
-		local terminalTimeIsValid = AssertHelper.ExpectedValAssert(
-			type(terminalTime) == "number",
-			terminalTime,
+		local terminalCaptureTime = data["TerminalCaptureTime"]
+		local terminalCaptureTimeIsValid = AssertHelper.ExpectedValAssert(
+			type(terminalCaptureTime) == "number",
+			terminalCaptureTime,
 			"terminalTime",
 			"number"
 		)
+		if(not terminalCaptureTimeIsValid) then return end
 		
-		if(not terminalTimeIsValid) then return end
-		
-		SetTerminalTime(terminalTime)
-		SetFillbarContainerScale(terminalTime)
-		
-		
+		SetTerminalOwnerCaptureTime(terminalCaptureTime)
+		SetFillbarContainerScale(terminalCaptureTime)
 		
 		local terminalOwner: Team? = data["TerminalOwner"]
 		local terminalOwnerIsValid = AssertHelper.ExpectedValAssert(
@@ -324,8 +355,8 @@ function TerminalUiSystem.Initialize()
 		if(not terminalOwnerIsValid) then return end
 		
 		SetTerminalOwnerMessage(terminalOwner)
-		
-		
+
+
 		local teamsOnTerminalState: TerminalConfig.TeamsOnTerminalState? = data["TeamsOnTerminalState"]
 		local teamsOnTerminalStateIsValid = AssertHelper.ExpectedValAssert(
 			TerminalConfig.teamsOnTerminalStates[teamsOnTerminalState] ~= nil,
@@ -349,9 +380,9 @@ function TerminalUiSystem.Initialize()
 		)
 		if(not terminalContestStateIsValid) then return end
 		if(terminalContestState ~= TerminalConfig.terminalContestStates.Uncontested.Name) then
-			SetTerminalSecondaryInfoVisibility(true)
+			SetTerminalCaptureTextVisibility(true)
 		else
-			SetTerminalSecondaryInfoVisibility(false)
+			SetTerminalCaptureTextVisibility(false)
 		end
 		
 		if(terminalContestState ~= TerminalConfig.terminalContestStates.Uncontested.Name) then
@@ -360,18 +391,116 @@ function TerminalUiSystem.Initialize()
 			SetTerminalTimeVisibility(false)
 		end
 		
-		replica:OnSet({"TerminalTime"}, function(newValue: number, oldValue: number)
-			SetTerminalTime(newValue)
+		local terminalOwnerMaxTimeReached = data["TerminalOwnerMaxTimeReached"]
+		local terminalOwnerMaxTimeReachedIsValid = AssertHelper.ExpectedValAssert(
+			type(terminalOwnerMaxTimeReached) == "boolean",
+			terminalOwnerMaxTimeReached,
+			"terminalOwnerMaxTimeReached",
+			"Initialize",
+			"boolean"
+		)
+		if(not terminalOwnerMaxTimeReachedIsValid) then return end
+		local terminalOwnerCaptureTime = data["TerminalOwnerCaptureTime"]
+		local terminalOwnerCaptureTimeIsValid = AssertHelper.ExpectedValAssert(
+			type(terminalOwnerCaptureTime) == "number",
+			terminalOwnerCaptureTime,
+			"terminalOwnerCaptureTime",
+			"Initialize",
+			"number"
+		)
+		if(not terminalOwnerCaptureTimeIsValid) then return end
+		
+		local terminalIsBeingCaptured = terminalCaptureTime ~= 0
+			or (terminalOwner ~= TeamConfig.teams.Guards.Team
+				and (not terminalOwnerMaxTimeReached))
+		if(terminalOwnerMaxTimeReached
+			or (not terminalIsBeingCaptured)) then
+			SetTerminalTimeVisibility(false)
+			SetTerminalFillbarVisibility(false)
+		else
+			SetTerminalTimeVisibility(true)
+			SetTerminalFillbarVisibility(true)
+		end
+		
+		replica:OnSet({"TerminalCaptureTime"}, function(newValue: number, oldValue: number)
+			local replicaData = replica.Data
+			local currentTerminalOwner: Team? = replicaData["TerminalOwner"]
+			local currentTerminalOwnerIsValid = AssertHelper.ExpectedValAssert(
+				typeof(currentTerminalOwner) == "Instance"
+				and currentTerminalOwner:IsA("Team"),
+				currentTerminalOwner,
+				"terminalOwner",
+				"Team"
+			)
+			if(not currentTerminalOwnerIsValid) then return end
+			local terminalIsBeingCaptured = newValue ~= 0
+				or (currentTerminalOwner ~= TeamConfig.teams.Guards.Team
+					and (not terminalOwnerMaxTimeReached))
+			
 			SetFillbarContainerScale(newValue)
+			
+			if(terminalIsBeingCaptured) then
+				SetTerminalFillbarVisibility(true)
+			else
+				TweenTerminalFillbarVisibility(false)
+			end
 		end)
 		
+		replica:OnSet({"TerminalOwnerMaxTimeReached"}, function(
+			newValue: boolean,
+			oldValue: boolean
+		)
+			local replicaData = replica.Data
+			local currentTerminalOwner: Team? = replicaData["TerminalOwner"]
+			local currentTerminalOwnerIsValid = AssertHelper.ExpectedValAssert(
+				typeof(currentTerminalOwner) == "Instance"
+					and currentTerminalOwner:IsA("Team"),
+				currentTerminalOwner,
+				"terminalOwner",
+				"Team"
+			)
+			if(not currentTerminalOwnerIsValid) then return end
+			
+			local currentCaptureTime = replicaData["TerminalCaptureTime"]
+			local currentCaptureTimeIsValid = AssertHelper.ExpectedValAssert(
+				type(currentCaptureTime) == "number",
+				currentCaptureTime,
+				"captureTime",
+				"Initialize",
+				"number"
+			)
+			if(not currentCaptureTimeIsValid) then return end
+			local terminalIsBeingCaptured = currentCaptureTime ~= 0
+				or (currentTerminalOwner ~= TeamConfig.teams.Guards.Team
+					and (not newValue))
+			if(newValue) then
+				TweenTerminalOwnerTimeTextVisibility(false)
+			end
+			
+			if(not terminalIsBeingCaptured) then
+				TweenTerminalFillbarVisibility(false)
+			end
+		end)
 		
+		replica:OnSet({"TerminalOwnerCaptureTime"}, function(
+			newValue: number,
+			oldValue: number
+		)
+			SetTerminalOwnerCaptureTime(newValue)
+		end)
 		
 		replica:OnSet({"TerminalOwner"}, function(
 			newValue: Team,
 			oldValue: Team
 		)
-
+			
+			if(newValue ~= TeamConfig.teams.Guards.Team) then
+				SetTerminalTimeVisibility(true)	
+				TweenTerminalFillbarVisibility(true)
+			else
+				SetTerminalTimeVisibility(false)
+				TweenTerminalFillbarVisibility(false)
+			end
 			SetTerminalOwnerMessage(newValue)
 			
 		end)
@@ -386,19 +515,14 @@ function TerminalUiSystem.Initialize()
 			oldValue: TerminalConfig.TerminalContestState
 		)
 			if(newValue ~= TerminalConfig.terminalContestStates.Uncontested.Name) then
-				TweenTerminalSecondaryInfoVisibility(true)
-			else
-				TweenTerminalSecondaryInfoVisibility(false)
+				SetTerminalCaptureTextVisibility(true)
+			elseif(newValue == TerminalConfig.terminalContestStates.Uncontested.Name
+				and newValue ~= oldValue) then
+				TweenTerminalCaptureTextVisibility(false)
 			end
-			if(newValue ~= TerminalConfig.terminalContestStates.Uncontested.Name) then
-				TweenTerminalOwnerTimeTextVisibility(true)
-			else
-				TweenTerminalOwnerTimeTextVisibility(false)
-			end
-			
 			if(newValue == TerminalConfig.terminalContestStates.GuardsContesting.Name) then
 				terminalOwnerFillbarStyleSheet:SetDerives({GuardsTeamTheme})
-			else
+			elseif(newValue == TerminalConfig.terminalContestStates.SubjectsContesting.Name) then
 				terminalOwnerFillbarStyleSheet:SetDerives({SubjectsTeamTheme})
 			end
 		end)
