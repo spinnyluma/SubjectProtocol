@@ -389,24 +389,29 @@ end
 
 
 --[[
-	Gets the instances that are NOT a particular instance under the same level in the DataModel
+	Gets the instances that are NOT in the provided list under the same level in the DataModel
 	hierarchy.
 	
-	@param instance Instance The instance to invert the selection for.
-	@returns {Instance?} The list of instances that are NOT the passed instance under the same DataModel hierarchy level.
+	@param instances {Instance} The instances to invert the selection for.
+	@returns {Instance?} The list of instances that are NOT in the passed list under the same DataModel hierarchy level.
 ]]
-function DataModelHelper.InvertSelection(instance: Instance): {Instance?}?
-	local instanceIsValid = AssertHelper.InvalidArgAssert(
-		typeof(instance) == "Instance",
-		instance,
-		"instance",
+function DataModelHelper.InvertSelection(instances: {Instance}): {Instance?}?
+	local instancesIsValid = AssertHelper.InvalidArgAssert(
+		type(instances) == "table",
+		instances,
+		"instances",
 		"DataModelHelper.InvertSelection",
-		"Instance"
+		"{Instance}"
 	)
-	if not instanceIsValid then return end
+	if not instancesIsValid then return end
 	
+	-- Build a lookup set for O(1) exclusion checks
+	local instanceLookup = {}
+	for _, inst in ipairs(instances) do
+		instanceLookup[inst] = true
+	end
 	
-	local parentInstance = instance.Parent
+	local parentInstance = instances[1].Parent
 	local parentInstanceIsValid = AssertHelper.ExpectedValAssert(
 		typeof(parentInstance) == "Instance",
 		parentInstance,
@@ -419,7 +424,7 @@ function DataModelHelper.InvertSelection(instance: Instance): {Instance?}?
 	local children = parentInstance:GetChildren()
 	local invertedSelection = {}
 	for _, child in children do
-		if child ~= instance then
+		if not instanceLookup[child] then
 			table.insert(invertedSelection, child)
 		end
 	end

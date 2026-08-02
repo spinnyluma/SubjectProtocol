@@ -14,6 +14,9 @@ local overlapParamsPresets = {
 	},
 	T_Experiment = {
 		ExcludeInstances = {"Self"}
+	},
+	T_SafeZone = {
+		ExcludeInstances = {"Self"}
 	}
 }
 
@@ -303,7 +306,8 @@ end
 
 SpatialQueryConfig.overlapParams = {
 	T_Keycard = GetKeycardOverlapParams,
-	T_Terminal = GetOverlapParams
+	T_Terminal = GetOverlapParams,
+	T_SafeZone = GetOverlapParams,
 }
 
 SpatialQueryConfig.raycastParams = {

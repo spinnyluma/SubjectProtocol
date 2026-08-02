@@ -2,6 +2,7 @@ local CollectionService = game:GetService("CollectionService")
 local UserInputService = game:GetService("UserInputService")
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local UserInputService = game:GetService("UserInputService")
 
 local ClientRaycastWeaponConfig = require(script.Config)
 local WeaponDataConfig = require(ReplicatedStorage.Modules.Shared.Constants.WeaponDataConfig)
@@ -12,6 +13,7 @@ local AssertHelper = require(ReplicatedStorage.Modules.Helpers.Debug.AssertHelpe
 local CharacterHelper = require(ReplicatedStorage.Modules.Helpers.Character.CharacterHelper)
 local RaycastParamsHelper = require(ReplicatedStorage.Modules.Helpers.SpatialQuery.RaycastParamsHelper)
 local TableHelper = require(ReplicatedStorage.Modules.Helpers.Table.TableHelper)
+local UiHelper = require(ReplicatedStorage.Modules.Helpers.UI.UiHelper)
 
 local CombatService = require(ReplicatedStorage.Modules.Services.Combat.CombatService)
 
@@ -112,87 +114,102 @@ local function FireRaycastWeaponFromMousePosition(weapon: Tool)
 	
 	
 	local mouseLocation = UserInputService:GetMouseLocation()
-	local ray = currentCamera:ViewportPointToRay(
-		mouseLocation.X,
-		mouseLocation.Y)
-	local params: RaycastParams? = SpatialQueryConfig.GetRaycastParams(ClientRaycastWeaponConfig.SYSTEM_TAG_NAME, {
-		["Self"] = weapon,
-		["AdditionalInstances"] = accessories
-	})
 	
-	local paramsIsValid = AssertHelper.ExpectedValAssert(
-		typeof(params) == "RaycastParams",
-		params,
-		"params",
-		"RaycastParams"
-	)
-	if(not paramsIsValid) then return end
+	Promise.try(function()
+		if(UserInputService.PreferredInput == Enum.PreferredInput.Touch) then
+			local touchPositionInCoreGui = UiHelper.IsJoystickAtPosition(
+				mouseLocation.X,
+				mouseLocation.Y
+			)
+			if(touchPositionInCoreGui) then
+				return
+			end
+		end
+		local ray = currentCamera:ViewportPointToRay(
+			mouseLocation.X,
+			mouseLocation.Y)
+		local params: RaycastParams? = SpatialQueryConfig.GetRaycastParams(ClientRaycastWeaponConfig.SYSTEM_TAG_NAME, {
+			["Self"] = weapon,
+			["AdditionalInstances"] = accessories
+		})
+
+		local paramsIsValid = AssertHelper.ExpectedValAssert(
+			typeof(params) == "RaycastParams",
+			params,
+			"params",
+			"RaycastParams"
+		)
+		if(not paramsIsValid) then return end
+
+		local rayResult: RaycastResult? = CombatService.FireRay(ray.Origin,
+			ray.Direction * raycastWeaponLength,
+			params)
+
+		local endPosition: Vector3? = nil
+		if(not rayResult) then
+			endPosition = ray.Origin + ray.Direction * raycastWeaponLength
+		else
+			endPosition = rayResult.Position
+		end
+
+		local realFiringParams = RaycastParamsHelper.CloneRaycastParams(params)
+		local realFiringParamsIsValid = AssertHelper.ExpectedValAssert(
+			typeof(realFiringParams) == "RaycastParams",
+			realFiringParams,
+			"realFiringParams",
+			"RaycastParams"
+		)
+		if(not realFiringParamsIsValid) then return end
+		local newExcludeInstances: {Instance?}? = TableHelper.JoinTables({playerCharacter},
+			realFiringParams.ExcludeInstances)
+		local newExcludeInstancesIsValid = AssertHelper.ExpectedValAssert(
+			type(newExcludeInstances) == "table",
+			newExcludeInstances,
+			"newExcludeInstances",
+			"table"
+		)
+		if(not newExcludeInstancesIsValid) then return end
+		realFiringParams.ExcludeInstances = newExcludeInstances
+		local epsilon = 0.05
+		local rayDirection = (endPosition - head.Position)
+		local rayDirectionMagnitude = rayDirection.Magnitude
+		local realFiringRayDirection = rayDirection.Unit * (rayDirectionMagnitude + epsilon)
+		local realFiringRayResult: RaycastResult? = CombatService.FireRay(
+			head.Position,
+			realFiringRayDirection,
+			realFiringParams
+		)
+		local realFiringEndPosition: Vector3? = nil
+		local instanceHit: Instance? = nil
+		if(not realFiringRayResult) then
+			realFiringEndPosition = head.Position + realFiringRayDirection
+
+		else
+			realFiringEndPosition = realFiringRayResult.Position
+			instanceHit = realFiringRayResult.Instance	
+		end
+		CombatService.GenerateRay(
+			tracerTemplate,
+			firePoint.Position,
+			realFiringEndPosition,
+			{Team = localPlayer.Team}
+		)
+
+		local raycastPacket: WeaponDataConfig.RaycastPacket = {
+			Weapon = weapon,
+			Origin = head.Position,
+			Direction = realFiringRayDirection,
+			EndPosition = realFiringEndPosition,
+			InstanceHit = instanceHit
+		}
+		fireRayRE:FireServer(raycastPacket)
+		return Promise.resolve()
+	end)
+		:catch(function(errorMsg)
+			AssertHelper.Warn(tostring(errorMsg))
+		end)
+
 	
-	
-	
-	
-	local rayResult: RaycastResult? = CombatService.FireRay(ray.Origin,
-		ray.Direction * raycastWeaponLength,
-		params)
-	
-	local endPosition: Vector3? = nil
-	if(not rayResult) then
-		endPosition = ray.Origin + ray.Direction * raycastWeaponLength
-	else
-		endPosition = rayResult.Position
-	end
-	
-	local realFiringParams = RaycastParamsHelper.CloneRaycastParams(params)
-	local realFiringParamsIsValid = AssertHelper.ExpectedValAssert(
-		typeof(realFiringParams) == "RaycastParams",
-		realFiringParams,
-		"realFiringParams",
-		"RaycastParams"
-	)
-	if(not realFiringParamsIsValid) then return end
-	local newExcludeInstances: {Instance?}? = TableHelper.JoinTables({playerCharacter},
-		realFiringParams.ExcludeInstances)
-	local newExcludeInstancesIsValid = AssertHelper.ExpectedValAssert(
-		type(newExcludeInstances) == "table",
-		newExcludeInstances,
-		"newExcludeInstances",
-		"table"
-	)
-	if(not newExcludeInstancesIsValid) then return end
-	realFiringParams.ExcludeInstances = newExcludeInstances
-	local epsilon = 0.05
-	local rayDirection = (endPosition - head.Position)
-	local rayDirectionMagnitude = rayDirection.Magnitude
-	local realFiringRayDirection = rayDirection.Unit * (rayDirectionMagnitude + epsilon)
-	local realFiringRayResult: RaycastResult? = CombatService.FireRay(
-		head.Position,
-		realFiringRayDirection,
-		realFiringParams
-	)
-	local realFiringEndPosition: Vector3? = nil
-	local instanceHit: Instance? = nil
-	if(not realFiringRayResult) then
-		realFiringEndPosition = head.Position + realFiringRayDirection
-			
-	else
-		realFiringEndPosition = realFiringRayResult.Position
-		instanceHit = realFiringRayResult.Instance	
-	end
-	CombatService.GenerateRay(
-		tracerTemplate,
-		firePoint.Position,
-		realFiringEndPosition,
-		{Team = localPlayer.Team}
-	)
-	
-	local raycastPacket: WeaponDataConfig.RaycastPacket = {
-		Weapon = weapon,
-		Origin = head.Position,
-		Direction = realFiringRayDirection,
-		EndPosition = realFiringEndPosition,
-		InstanceHit = instanceHit
-	}
-	fireRayRE:FireServer(raycastPacket)
 end
 
 local function InitializeRaycastWeapon(weapon: Tool)
@@ -225,9 +242,9 @@ local function InitializeRaycastWeapon(weapon: Tool)
 
 	end))
 	
-	currentWeaponTrove:Add(fireWeaponInputAction.Pressed:Connect(function()
+	currentWeaponTrove:Add(fireWeaponInputAction.Pressed:Connect(function(touch)
 		FireRaycastWeaponFromMousePosition(weapon)
-
+		
 	end))
 	
 	currentWeaponTrove:Add(weapon.Unequipped:Connect(function()

@@ -270,7 +270,7 @@ function RaycastWeaponSystem.Initialize()
 		if(not endPositionIsValid) then return end
 		
 		
-		local otherPlayers = DataModelHelper.InvertSelection(player)
+		local otherPlayers = DataModelHelper.InvertSelection({player})
 		if(not otherPlayers) then return end
 
 

@@ -15,6 +15,7 @@ local ProximitySystem = {}
 local queryTargets = {
 	T_Keycard = {"T_KeycardReader"},
 	T_Terminal = {"T_Player"},
+	T_SafeZone = {"T_Player"}
 }
 
 
@@ -117,6 +118,7 @@ end
 
 function ProximitySystem.Update(timeSinceLastUpdate: number)
 	local taggedInstances = CollectionService:GetTagged(ProximityConfig.SYSTEM_TAG_NAME)
+	local proximityObjectsFound: {[string]: {[Instance]: {Instance}}?} = {}
 	for _, taggedInstance in taggedInstances do
 		if(not taggedInstance:IsDescendantOf(workspace)) then
 			continue
@@ -218,7 +220,14 @@ function ProximitySystem.Update(timeSinceLastUpdate: number)
 		local instancesFound = PerformProximityQuery(origin, queryType, overlapParams, presetKey, interactionRadius)
 		if(not instancesFound) then return end
 		
-		ProximitySignals.ProximityObjectsFound:Fire(presetKey, taggedInstance, instancesFound)
+		if(not proximityObjectsFound[presetKey]) then
+			proximityObjectsFound[presetKey] = {}
+		end
+		proximityObjectsFound[presetKey][taggedInstance] = instancesFound
+	end
+	
+	for presetKey, proximityObjects in proximityObjectsFound do
+		ProximitySignals.ProximityObjectsFound:Fire(presetKey, proximityObjects)
 	end
 end
 

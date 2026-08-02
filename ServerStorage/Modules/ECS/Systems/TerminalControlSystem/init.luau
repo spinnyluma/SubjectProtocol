@@ -471,12 +471,15 @@ end
 function TerminalControlSystem.Initialize()
 	SystemManagerModule.SetGlobalGameState("TerminalOwner", TeamConfig.teams.Guards.Team)
 	ProximitySignals.ProximityObjectsFound:Connect(function(proximityInteractionType: string,
-		querySource: Instance,
-		instancesFound: {Instance?}
+		proximityObjects: {[Instance]: {Instance?}?}
 	)
-		if(proximityInteractionType == ProximityConfig.proximityInteractionTypes.T_Terminal.Name) then
-			HandleTerminalControlSystem(proximityInteractionType, querySource, instancesFound)
+		
+		for proximityObject, objectsFound in proximityObjects do
+			if(proximityInteractionType == ProximityConfig.proximityInteractionTypes.T_Terminal.Name) then
+				HandleTerminalControlSystem(proximityInteractionType, proximityObject, objectsFound)
+			end
 		end
+		
 	end)
 	terminalReplica:Replicate()
 end

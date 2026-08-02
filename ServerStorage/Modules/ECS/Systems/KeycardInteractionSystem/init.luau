@@ -89,12 +89,14 @@ end
 
 function KeycardInteractionSystem.Initialize()
 	ProximitySignals.ProximityObjectsFound:Connect(function(interactionType: string,
-		querySource: Instance,
-		instancesFound: {Instance?}
+		proximityObjects: {[Instance]: {Instance}?}
 	)
-		if(interactionType == ProximityConfig.proximityInteractionTypes.T_Keycard.Name) then
-			InitiateKeycardInteraction(interactionType, querySource, instancesFound)
-		end		
+		for proximityObject, objectsFound in proximityObjects do
+			if(interactionType == ProximityConfig.proximityInteractionTypes.T_Keycard.Name) then
+				InitiateKeycardInteraction(interactionType, proximityObject, objectsFound)
+			end		
+		end
+		
 	end)	
 end
 
