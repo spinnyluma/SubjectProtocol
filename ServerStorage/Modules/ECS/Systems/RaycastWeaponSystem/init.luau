@@ -1,6 +1,8 @@
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Players = game:GetService("Players")
 local CollectionService = game:GetService("CollectionService")
+local ServerStorage = game:GetService("ServerStorage")
+local Teams = game:GetService("Teams")
 
 
 local RaycastWeaponConfig = require(script.Config)
@@ -8,19 +10,20 @@ local WeaponDataConfig = require(ReplicatedStorage.Modules.Shared.Constants.Weap
 local SpatialQueryConfig = require(ReplicatedStorage.Modules.Shared.Constants.SpatialQueryConfig)
 local CharacterConfig = require(ReplicatedStorage.Modules.Shared.Constants.CharacterConfig)
 local CombatServiceConfig = require(ReplicatedStorage.Modules.Services.Combat.CombatService.Config)
-
+local HostilitySystemSignals = require(ServerStorage.Modules.ECS.Systems.HostilitySystem.Signals)
 
 local AssertHelper = require(ReplicatedStorage.Modules.Helpers.Debug.AssertHelper)
 local CharacterHelper = require(ReplicatedStorage.Modules.Helpers.Character.CharacterHelper)
 local SpatialQueryHelper  = require(ReplicatedStorage.Modules.Helpers.SpatialQuery.SpatialQueryHelper)
 local TableHelper = require(ReplicatedStorage.Modules.Helpers.Table.TableHelper)
 local DataModelHelper = require(ReplicatedStorage.Modules.Helpers.DataModel.DataModelHelper)
-
+local CombatHelper = require(ServerStorage.Modules.Helpers.Combat.CombatHelper)
 
 local CombatService = require(ReplicatedStorage.Modules.Services.Combat.CombatService)
 
 local CombatServiceSignals = require(ReplicatedStorage.Modules.Services.Combat.CombatService.Signals)
 
+local subjectsTeam = Teams.Subjects
 
 local fireRayRE = ReplicatedStorage.Assets.Shared.Remotes.Events.FireRay
 
@@ -218,13 +221,55 @@ function RaycastWeaponSystem.Initialize()
 		
 		
 		if(instanceHitIsValid) then
+			local weapon = weaponDataConfig.Weapon
+			local weaponIsValid = AssertHelper.ExpectedValAssert(
+				typeof(weapon) == "Instance"
+					and weapon:IsA("Model"),
+				weapon,
+				"weapon",
+				"Model"
+			)
+			if(not weaponIsValid) then return end
+
+			local firePoint: BasePart? = weapon.FirePoint
+			local firePointIsValid = AssertHelper.ExpectedValAssert(
+				typeof(firePoint) == "Instance"
+					and firePoint:IsA("BasePart"),
+				firePoint,
+				"firePoint",
+				"BasePart"
+			)
+			if(not firePointIsValid) then return end
+			local endPosition = weaponDataConfig.EndPosition
+			local endPositionIsValid = AssertHelper.ExpectedValAssert(
+				typeof(endPosition) == "Vector3",
+				endPosition,
+				"endPosition",
+				"Vector3"
+			)
+			if(not endPositionIsValid) then return end
+
+
+			local otherPlayers = DataModelHelper.InvertSelection({player})
+			if(not otherPlayers) then return end
+
+
+			local playerTeam = player.Team 
+			CombatService.ReplicateRay(firePoint, endPosition, otherPlayers, {
+				Team = playerTeam
+			})
+			
 			local instanceBelongsToCharacter = CharacterHelper.IsPartInCharacterModel(instanceHit)
 			local instanceBelongsToDamageableObject = CombatService.IsInstancePartOfDamageableObject(instanceHit)
 			
-			
+				
 			if(instanceBelongsToCharacter) then
+				local playerCanAttack = CombatHelper.PlayerCanAttackCharacter(player, instanceHit)
+				if(not playerCanAttack) then return end
 				DamageCharacter(instanceHit)
-			
+				if(player.Team == subjectsTeam) then
+					HostilitySystemSignals.HostilityRequested:Fire(player)
+				end
 			elseif(instanceBelongsToDamageableObject) then
 				local rootParent = DataModelHelper.GetRootParentWithTag(instanceHit, 
 					CombatServiceConfig.DAMAGEABLE_TAG_NAME
@@ -238,46 +283,7 @@ function RaycastWeaponSystem.Initialize()
 				if(not rootParentIsValid) then return end
 				CombatServiceSignals.DamageableObjectDamageRequested:Fire(rootParent, 7)				
 			end
-			
 		end
-		
-		local weapon = weaponDataConfig.Weapon
-		local weaponIsValid = AssertHelper.ExpectedValAssert(
-			typeof(weapon) == "Instance"
-				and weapon:IsA("Model"),
-			weapon,
-			"weapon",
-			"Model"
-		)
-		if(not weaponIsValid) then return end
-		
-		local firePoint: BasePart? = weapon.FirePoint
-		local firePointIsValid = AssertHelper.ExpectedValAssert(
-			typeof(firePoint) == "Instance"
-				and firePoint:IsA("BasePart"),
-			firePoint,
-			"firePoint",
-			"BasePart"
-		)
-		if(not firePointIsValid) then return end
-		local endPosition = weaponDataConfig.EndPosition
-		local endPositionIsValid = AssertHelper.ExpectedValAssert(
-			typeof(endPosition) == "Vector3",
-			endPosition,
-			"endPosition",
-			"Vector3"
-		)
-		if(not endPositionIsValid) then return end
-		
-		
-		local otherPlayers = DataModelHelper.InvertSelection({player})
-		if(not otherPlayers) then return end
-
-
-		local playerTeam = player.Team 
-		CombatService.ReplicateRay(firePoint, endPosition, otherPlayers, {
-			Team = playerTeam
-		})
 	end)
 end
 

@@ -2,10 +2,12 @@ local ServerStorage = game:GetService("ServerStorage")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Teams = game:GetService("Teams")
 local CollectionService = game:GetService("CollectionService")
-
+local Players = game:GetService("Players")
 
 
 local HostilityConfig = require(ReplicatedStorage.Modules.Shared.Constants.HostilityConfig)
+
+local HostilitySystemSignals = require(ServerStorage.Modules.ECS.Systems.HostilitySystem.Signals)
 
 local AssertHelper = require(ReplicatedStorage.Modules.Helpers.Debug.AssertHelper)
 local TableHelper = require(ReplicatedStorage.Modules.Helpers.Table.TableHelper)
@@ -172,6 +174,25 @@ local function StartMarkingSubjectsInSafeZone(currentSubjectsOutOfSafeZone: {Pla
 	end
 end
 
+local function IsPlayerHostile(player: Player)
+	local playerIsValid = AssertHelper.InvalidArgAssert(
+		typeof(player) == "Instance"
+		and player:IsA("Player"),
+		player,
+		"player",
+		"IsPlayerHostile",
+		"Player"
+	)
+	if(not playerIsValid) then return end
+	
+	local playerCharacter = player.Character
+	if(not playerCharacter) then return end
+	
+	local hasHostileTag = CollectionService:HasTag(playerCharacter, HostilityConfig.HOSTILE_TAG_NAME)
+	return hasHostileTag
+end
+
+
 function HostilitySystem.Initialize()
 	ProximityInteractionSignals.ProximityObjectsFound:Connect(function(interactionType: string,
 		proximityObjects: {[Instance]: {Instance?}?})
@@ -179,7 +200,10 @@ function HostilitySystem.Initialize()
 			return
 		end
 		
-		local subjectsOutOfSafeZone = GetSubjectsOutOfSafeZone(proximityObjects)
+		local playersOutOfSafeZone = GetSubjectsOutOfSafeZone(proximityObjects)
+		local subjectsOutOfSafeZone = TableHelper.FilterTable(playersOutOfSafeZone, function(player: Model)
+			return player.Team == subjectsTeam
+		end)
 		if(not subjectsOutOfSafeZone) then return end
 		MarkSubjectsAsHostile(subjectsOutOfSafeZone)
 		if(#subjectsOutOfSafeZone == 0) then
@@ -187,6 +211,15 @@ function HostilitySystem.Initialize()
 		else
 			StartMarkingSubjectsInSafeZone(subjectsOutOfSafeZone)	
 		end
+	end)
+	
+	HostilitySystemSignals.HostilityRequested:Connect(function(player: Player)
+		local playerIsHostile = IsPlayerHostile(player)
+		if(playerIsHostile) then return end
+		local playerIsSubject = player.Team == subjectsTeam
+		if(not playerIsSubject) then return end
+		
+		MarkSubjectsAsHostile({player})
 	end)
 end
 return HostilitySystem

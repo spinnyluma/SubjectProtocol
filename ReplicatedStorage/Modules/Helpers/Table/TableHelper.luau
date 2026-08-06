@@ -48,4 +48,31 @@ function TableHelper.JoinTables(baseTable: {any?}, ...: {any?})
 	return baseTable
 end
 
+function TableHelper.FilterTable<T>(tableToFilter: {T?}, callback: (T?) -> ())
+	local tableToFilterIsValid = AssertHelper.InvalidArgAssert(
+		type(tableToFilter) == "table",
+		tableToFilter,
+		"table",
+		"TableHelper.FilterTable",
+		"table"
+	)
+	if(not tableToFilterIsValid) then return end
+	local callbackIsValid = AssertHelper.InvalidArgAssert(
+		type(callback) == "function",
+		callback,
+		"callback",
+		"TableHelper.FilterTable",
+		"function"
+	)
+	if(not callbackIsValid) then return end
+	
+	local filteredTable = {}
+	for _, element in tableToFilter do
+		if(callback(element)) then
+			table.insert(filteredTable, element)
+		end
+	end
+	return filteredTable
+end
+
 return TableHelper

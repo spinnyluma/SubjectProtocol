@@ -94,10 +94,8 @@ function SystemManagerModule.GetComponentIndexByEntity(componentName: string, en
 		return nil
 	end
 	local componentTable: {[string]: any?}? = SystemManagerModule.world["Components"][componentName]
-	local componentTableIsValid: boolean? = AssertHelper.Assert(
-		`Component with name {componentName} does not exist`,
-		type(componentTable) == "table"
-	)
+	local componentTableIsValid: boolean? = type(componentTable) == "table"
+	
 	if(not componentTableIsValid) then
 		return nil
 	end
@@ -203,19 +201,16 @@ function SystemManagerModule.GetComponentByEntity<T>(componentName: string, enti
 		return nil
 	end
 	local componentIndex: number? = SystemManagerModule.GetComponentIndexByEntity(componentName, entity)
-	local componentIndexIsValid: boolean? = AssertHelper.Assert(
-		`number expected for componentIndex, got {componentIndex}`,
-		type(componentIndex) == "number"
-	)
+	local componentIndexIsValid: boolean? = type(componentIndex) == "number"
+	
 	if(not componentIndexIsValid) then
 		return nil
 	end
 	
 	local component: any? = SystemManagerModule.GetComponentByIndex(componentName, componentIndex)
-	local componentIsValid: boolean? = AssertHelper.Assert(
-		`table expected for component, got {component}`,
-		type(component) == "table"
-	)
+	local componentIsValid: boolean? = type(component) == "table"
+		or typeof(component) == "Instance"
+	
 	if(not componentIsValid) then
 		return nil
 	end
@@ -468,7 +463,7 @@ end
 	
 	@param string componentName The name of the component to add.
 	@param Instance entity The entity to add the component to.
-	@returns any? Returns the component that was added.
+	@returns any? Returns the component that was added. Returns nil if there was an error creating the component or if the component already exists.
 ]]
 function SystemManagerModule.AddComponent(componentName: string, entity: Instance | {}): any?
 	local componentNameIsValid: boolean? = AssertHelper.InvalidArgAssert(
@@ -509,7 +504,13 @@ function SystemManagerModule.AddComponent(componentName: string, entity: Instanc
 	if(not requiredComponentModuleIsValid) then
 		return
 	end
-
+	
+	
+	local componentExists = SystemManagerModule.DoesEntityComponentExist(componentName, entity)
+	
+	if(componentExists) then
+		return
+	end
 	local componentConstructor: (any?) -> any? = requiredComponentModule["new"]
 	local componentConstructorIsValid: boolean? = AssertHelper.Assert(
 		`function expected for componentConstructor, got {componentConstructor}`,
@@ -785,7 +786,6 @@ function SystemManagerModule.ClearComponentByEntity(componentName: string,
 	if(not entityIsValid) then
 		return false
 	end
-	
 	local component: any? = SystemManagerModule.GetComponentByEntity(componentName, entity)
 	local componentIsValid: boolean? = AssertHelper.ExpectedValAssert(
 		type(component) == "table",
