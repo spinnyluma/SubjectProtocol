@@ -3,53 +3,26 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Players = game:GetService("Players")
 
 const AnimatorLoadingSystemSignals = require("./AnimatorLoadingSystem/Signals")
+const MeleeStateComponentSignals = require("../Components/MeleeStateComponent/Signals")
+const MeleeStateComponentConfig = require("../Components/MeleeStateComponent/Config")
+const ToolAnimationSystemConfig = require("@self/Config")
 const ToolAnimationHandlers = require("@self/ToolAnimationHandlers")
+const MeleeStateComponent = require("../Components/MeleeStateComponent")
 const SystemManagerModule = require("../SystemManagerModule")
+const InputSystemSignals = require("./InputSystem/Signals")
 const AssertHelper = require("../../Helpers/Debug/AssertHelper")
+const InputService = require("../../Services/Input/InputService")
 const AssetConfig = require("../../Shared/Constants/AssetConfig")
 const ToolConfig = require("../../Shared/Constants/ToolConfig")
-
-
-local usingMeleeTool = ReplicatedStorage.Assets.Input.Contexts.UsingMeleeTool
-
-local animationGraphIds = {
-	[ToolConfig.toolTypes.TwoHandedTool.Name] = "134652981384574" 
-}
-
-
-local inputContextsByToolType = {
-	[ToolConfig.toolTypes.TwoHandedTool.Name] = usingMeleeTool
-}
-
+const ToolHelper = require("../../Helpers/Tool/ToolHelper")
+const Promise = require("../../Utilities/Promise")
+const Trove = require("../../Utilities/Trove")
 
 local ToolAnimationSystem = {}
 
-local function GetToolType(tool: Tool)
-	local toolIsValid = AssertHelper.InvalidArgAssert(
-		typeof(tool) == "Instance"
-		and tool:IsA("Tool"),
-		tool,
-		"tool",
-		"GetToolType",
-		"Tool"
-	)
-	if(not toolIsValid) then return end
-	
-	local toolTypeObtained: string? = nil
-	
-	for _, toolType in ToolConfig.toolTypes do
-		local toolTypeTag = toolType.Tag
-		if(not toolTypeTag) then continue end
-		if(CollectionService:HasTag(tool, toolTypeTag)) then
-			toolTypeObtained = toolType.Name
-			break
-		end
-	end
-	
-	return toolTypeObtained
-end
+local meleeStateSignalTroves: {[Tool]: Trove.Trove} = {}
 
-local function InitializeEventHandlersByToolType(toolType: string)
+local function InitializeEventHandlersByToolType(toolType: string, tool: Tool)
 	local toolTypeIsValid = AssertHelper.InvalidArgAssert(
 		type(toolType) == "string",
 		toolType,
@@ -59,12 +32,34 @@ local function InitializeEventHandlersByToolType(toolType: string)
 	)
 	if(not toolTypeIsValid) then return end
 	
-	local toolAnimationHandler: (Tool) -> ()? = ToolAnimationHandlers.GetToolActivationHandlerFn(toolType)
-	toolAnimationHandler(toolType)
+	local toolIsValid = AssertHelper.InvalidArgAssert(
+		typeof(tool) == "Instance"
+		and tool:IsA("Tool"),
+		tool,
+		"tool",
+		"InitializeEventHandlersByToolType",
+		"Tool"
+	)
+	if(not toolIsValid) then return end
 	
+	local toolAnimationHandler: (Tool) -> ()? = ToolAnimationHandlers.GetToolActivationHandlerFn(toolType)
+	local toolAnimationHandlerIsValid = AssertHelper.ExpectedValAssert(
+		type(toolAnimationHandler) == "function",
+		toolAnimationHandler,
+		"toolAnimationHandler",
+		"InitializeEventHandlersByToolType",
+		"function"
+	)
+	if(not toolAnimationHandlerIsValid) then return end
+	
+	toolAnimationHandler(toolType, tool)
 end
 
-local function LoadAnimationGraph(character: Model, tool: Tool)
+local function LoadAnimationGraph(
+	character: Model,
+	tool: Tool,
+	meleeState: MeleeStateComponentConfig.MeleeState
+)
 	local characterIsValid = AssertHelper.InvalidArgAssert(
 		typeof(character) == "Instance"
 		and character:IsA("Model"),
@@ -85,6 +80,8 @@ local function LoadAnimationGraph(character: Model, tool: Tool)
 	)
 	if(not toolIsValid) then return end
 	
+	
+	
 	local humanoid = character:FindFirstChildWhichIsA("Humanoid")
 	if(not humanoid) then return end
 	
@@ -92,11 +89,9 @@ local function LoadAnimationGraph(character: Model, tool: Tool)
 	if(not animator) then return end
 	
 	
-	
-	local toolType = GetToolType(tool)
+	local toolType = ToolHelper.GetToolType(tool)
 	if(not toolType) then return end
-
-	local animationGraphId: string? = animationGraphIds[toolType]
+	local animationGraphId: string? = ToolAnimationSystemConfig.animationGraphIds[toolType]
 	local animationGraphIdIsValid = AssertHelper.ExpectedValAssert(
 		typeof(animationGraphId) == "string",
 		animationGraphId,
@@ -107,6 +102,25 @@ local function LoadAnimationGraph(character: Model, tool: Tool)
 	if(not animationGraphIdIsValid) then return end
 	
 	local loadedAnimatorAnimsComp = SystemManagerModule.GetComponentByEntity("LoadedAnimatorAnims", animator)
+	
+	local toolAnimConfig = ToolConfig.toolAnimationConfigs[tool.Name]
+	local toolAnimConfigIsValid = AssertHelper.ExpectedValAssert(
+		type(toolAnimConfig) == "table",
+		toolAnimConfig,
+		"toolAnimConfig",
+		"table"
+	)
+	if(not toolAnimConfigIsValid) then return end
+
+	local equipAnimLength = toolAnimConfig.EquipAnimationLength
+	local equipAnimLengthIsValid = AssertHelper.ExpectedValAssert(
+		type(equipAnimLength) == "number",
+		equipAnimLength,
+		"equipAnimLength",
+		"number"
+	)
+	if(not equipAnimLengthIsValid) then return end
+	
 	if(loadedAnimatorAnimsComp) then
 		local loadedAnimTracks = loadedAnimatorAnimsComp.LoadedAnimationTracks
 		local loadedAnimTracksIsValid = AssertHelper.ExpectedValAssert(
@@ -129,12 +143,42 @@ local function LoadAnimationGraph(character: Model, tool: Tool)
 		)
 		if(not animTrackIsValid) then return end
 		
-		animTrack:Play()
-		InitializeEventHandlersByToolType(toolType)
+		local toolAnimConfig = ToolConfig.toolAnimationConfigs[tool.Name]
+		local toolAnimConfigIsValid = AssertHelper.ExpectedValAssert(
+			type(toolAnimConfig) == "table",
+			toolAnimConfig,
+			"toolAnimConfig",
+			"table"
+		)
+		if(not toolAnimConfigIsValid) then return end
+		
+		local weaponId: string? = toolAnimConfig.WeaponId
+		local weaponIdIsValid = AssertHelper.ExpectedValAssert(
+			type(weaponId) == "string",
+			weaponId,
+			"weaponId",
+			"string"
+		)
+		if(not weaponIdIsValid) then return end
+		
+		
+		animTrack:SetParameter("WeaponId", weaponId)
+		
+		if(meleeState == MeleeStateComponentConfig.states.Equip.Name) then
+			print("went in equip1!!!")
+			animTrack:SetParameter("IsAttacking", false)
+			animTrack:SetParameter("AlternativeActionWeight", 0)
+		elseif(meleeState == MeleeStateComponentConfig.states.Attacking.Name) then
+			print("went in attacking")
+			animTrack:SetParameter("IsAttacking", true)
+			animTrack:SetParameter("AlternativeActionWeight", 1)
+		end
+		if(not animTrack.IsPlaying) then
+			animTrack:Play()
+		end	
+
 	else
 		local animationGraph = Instance.new("Animation")
-		
-		
 		
 		animationGraph.AnimationId = AssetConfig.assetIdPrefix 
 			.. animationGraphId
@@ -144,12 +188,18 @@ local function LoadAnimationGraph(character: Model, tool: Tool)
 			local weaponId = toolConfig.WeaponId
 			animTrack:SetParameter("WeaponId", weaponId)
 		end
-		
+		if(meleeState == MeleeStateComponentConfig.states.Equip.Name) then
+			animTrack:SetParameter("IsAttacking", false)
+			animTrack:SetParameter("AlternativeActionWeight", 0)
+		elseif(meleeState == MeleeStateComponentConfig.states.Attacking.Name) then
+			animTrack:SetParameter("IsAttacking", true)
+			animTrack:SetParameter("AlternativeActionWeight", 1)
+		end
 		AnimatorLoadingSystemSignals.AnimatorTrackCacheRequested:Fire(animator, animTrack)
-		animTrack.Priority = Enum.AnimationPriority.Action
+		if(not animTrack.IsPlaying) then
+			animTrack:Play()
 		
-		animTrack:Play()
-		InitializeEventHandlersByToolType(toolType)
+		end	
 	end
 end
 
@@ -190,10 +240,10 @@ local function UnloadAnimationGraph(character: Model, tool: Tool)
 	local animator = humanoid:FindFirstChildWhichIsA("Animator")
 	if(not animator) then return end
 
-	local toolType = GetToolType(tool)
+	local toolType = ToolHelper.GetToolType(tool)
 	if(not toolType) then return end
 
-	local animationGraphId: string? = animationGraphIds[toolType]
+	local animationGraphId: string? = ToolAnimationSystemConfig.animationGraphIds[toolType]
 	local animationGraphIdIsValid = AssertHelper.ExpectedValAssert(
 		typeof(animationGraphId) == "string",
 		animationGraphId,
@@ -213,80 +263,97 @@ local function UnloadAnimationGraph(character: Model, tool: Tool)
 	end
 end
 
-
-local function ActivateInputContextByToolType(toolType: string)
-	local toolTypeIsValid = AssertHelper.InvalidArgAssert(
-		typeof(toolType) == "string",
-		toolType,
-		"toolType",
-		"ActivateInputContextByToolType",
-		"string"
-	)
-	if(not toolTypeIsValid) then return end
+local function InitializeLoadedAnimatorAnimsHandlers()
+	const localPlayer = Players.LocalPlayer
+	const character = localPlayer.Character
 	
-	
-end
+	character.ChildRemoved:Connect(function(child: Instance)
+		Promise.try(function()
+			const humanoid = character:WaitForChild("Humanoid")
+			const animator = humanoid:WaitForChild("Animator")
+			local loadedAnimatorAnimsComp = SystemManagerModule.GetComponentByEntity("LoadedAnimatorAnims", animator)
+			if(loadedAnimatorAnimsComp) then
+				local loadedAnimTracks = loadedAnimatorAnimsComp.LoadedAnimationTracks
 
-local function ActivateInputContext(tool: Tool)
-	local toolIsValid = AssertHelper.InvalidArgAssert(
-		typeof(tool) == "Instance"
-			and tool:IsA("Tool"),
-		tool,
-		"tool",
-		"ActivateInputContext",
-		"Tool"
-	)
-	if(not toolIsValid) then return end
-	
-	local toolType = GetToolType(tool)
-	if(not toolType) then return end
+				for id, loadedTrack in loadedAnimTracks do
+					loadedTrack:Stop()
+				end
 
-	
-end
-
-
-local function InitializeToolAnimationHandlers()
-	local localPlayer = Players.LocalPlayer
-	
-	local character = localPlayer.Character
-	if(character) then
-		character.ChildAdded:Connect(function(child: Instance)
-			if(child:IsA("Tool")) then
-				LoadAnimationGraph(character, child)
 			end
 		end)
 		
-		character.ChildRemoved:Connect(function(child: Instance)
-			if(child:IsA("Tool")) then
-				UnloadAnimationGraph(character, child)
-			end
-		end)
-	end
-	localPlayer.CharacterAdded:Connect(function(character: Model)
-		character.ChildAdded:Connect(function(child: Instance)
-			if(child:IsA("Tool")) then
-				LoadAnimationGraph(character, child)
-			end
-		end)
-
-		character.ChildRemoved:Connect(function(child: Instance)
-			if(child:IsA("Tool")) then
-				UnloadAnimationGraph(character, child)
-			end
-		end)
 		
+	end)
+	
+	localPlayer.CharacterRemoving:Connect(function(character: Model)
+		Promise.try(function()
+			const humanoid = character:WaitForChild("Humanoid")
+			const animator = humanoid:WaitForChild("Animator")
+			local loadedAnimatorAnims = SystemManagerModule.GetComponentByEntity("LoadedAnimatorAnims", animator)
+			if(not loadedAnimatorAnims) then return end
+			
+			local loadedAnimatorAnimsComp = SystemManagerModule.GetComponentByEntity("LoadedAnimatorAnims", animator)
+			if(loadedAnimatorAnimsComp) then
+				local loadedAnimTracks = loadedAnimatorAnimsComp.LoadedAnimationTracks
+				for id, loadedTrack in loadedAnimTracks do
 
+					loadedTrack:Stop()
+				end
+				SystemManagerModule.RemoveComponent("LoadedAnimatorAnims", animator)	
+			end
+		end)
+			:catch(function(errorMsg)
+				AssertHelper.Warn(tostring(errorMsg))
+			end)
 	end)
 	
 	
-	
 end
 
 
-
 function ToolAnimationSystem.Initialize()
-	InitializeToolAnimationHandlers()
+	InitializeLoadedAnimatorAnimsHandlers()
+	MeleeStateComponentSignals.MeleeStateCreated:Connect(function(meleeStateComponent: MeleeStateComponent.MeleeStateComponent,
+		tool: Tool
+	)
+		const localPlayer = Players.LocalPlayer
+		const character = localPlayer.Character
+		
+		if(not meleeStateSignalTroves[tool]) then
+			meleeStateSignalTroves[tool] = Trove.new()
+		end
+		
+		local meleeStateSignalTrove = meleeStateSignalTroves[tool]
+		if(not meleeStateSignalTrove) then return end
+		if(character) then
+			--TODO: delete connections when meleestate destroyed
+			const meleeStateChangedConn = MeleeStateComponentSignals.MeleeStateChanged:Connect(function(meleeStateComponent: MeleeStateComponent.MeleeStateComponent,
+				entity: Instance,
+				newState: MeleeStateComponentConfig.MeleeState
+			)
+				LoadAnimationGraph(character, entity, newState)
+			end)	
+			meleeStateSignalTrove:Add(meleeStateChangedConn)
+		end
+		localPlayer.CharacterAdded:Connect(function(character: Model)
+			const meleeStateChangedConnOnNewChar = MeleeStateComponentSignals.MeleeStateChanged:Connect(function(meleeStateComponent: MeleeStateComponent.MeleeStateComponent,
+				entity: Instance,
+				newState: MeleeStateComponentConfig.MeleeState
+			)
+				LoadAnimationGraph(character, entity, newState)
+			end)
+			meleeStateSignalTrove:Add(meleeStateChangedConnOnNewChar)
+		end)
+	end)
 	
+	
+	MeleeStateComponentSignals.MeleeStateRemoved:Connect(function(tool: Tool)
+		local meleeStateTrove = meleeStateSignalTroves[tool]
+		if(meleeStateTrove) then
+			meleeStateTrove:Clean()
+			meleeStateSignalTroves[tool] = nil
+		end
+	end)
 end
 
 return ToolAnimationSystem

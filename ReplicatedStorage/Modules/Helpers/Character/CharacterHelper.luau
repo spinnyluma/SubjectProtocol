@@ -33,14 +33,8 @@ function CharacterHelper.GetHumanoidFromCharacter(character: Model): Humanoid
 	end
 	
 	local humanoid: Humanoid? = character:FindFirstChildWhichIsA("Humanoid")
-	local humanoidIsValid: boolean? = AssertHelper.ExpectedValAssert(
-		typeof(humanoid) == "Instance"
-		and humanoid:IsA("Humanoid"),
-		humanoid,
-		"humanoid",
-		"Humanoid"
-	)
-	if(not humanoidIsValid) then
+	
+	if(not humanoid) then
 		return nil
 	end
 	return humanoid

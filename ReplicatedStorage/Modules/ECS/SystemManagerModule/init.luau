@@ -93,6 +93,7 @@ function SystemManagerModule.GetComponentIndexByEntity(componentName: string, en
 	if(not entityIsValid) then
 		return nil
 	end
+	
 	local componentTable: {[string]: any?}? = SystemManagerModule.world["Components"][componentName]
 	local componentTableIsValid: boolean? = type(componentTable) == "table"
 	
@@ -626,8 +627,8 @@ function SystemManagerModule.RemoveComponent(componentName: string, entity: Inst
 	if(not componentDataTableIsValid) then
 		return false
 	end
-	
 	local entityComponentIndex: number? = SystemManagerModule.GetComponentIndexByEntity(componentName, entity)
+	
 	local entityComponentIndexIsValid: boolean? = AssertHelper.Assert(
 		`Attempted to remove component {componentName} which does not exist for entity {entity}`,
 		type(entityComponentIndex) == "number"
@@ -754,6 +755,8 @@ function SystemManagerModule.RemoveComponent(componentName: string, entity: Inst
 	
 	return true
 end
+
+
 
 --[[
 	Clears table instance variables in a component and sets instance variables of other types to nil.

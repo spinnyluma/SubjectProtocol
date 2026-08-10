@@ -100,4 +100,30 @@ function DictionaryHelper.GetRandomValueFromDict(dictionary: {[string]: any?}): 
 	return dictionary[keys[nextRandomInt]]
 end
 
+--[[
+	Gets a random key from a dictionary.
+	If none or invalid arguments are passed, the function will return nil.
+	
+	@param dictionary {[TKey]: TValue?}? The dictionary from which to get a random key.
+	@returns TKey? A random key from the dictionary.
+]]
+function DictionaryHelper.GetRandomKeyFromDict<TKey, TValue>(dictionary: {[TKey]: TValue?}?): TKey?
+	local dictionaryIsValid = AssertHelper.InvalidArgAssert(
+		type(dictionary) == "table",
+		dictionary,
+		"dictionary",
+		"DictionaryHelper.GetRandomKeyFromDict",
+		"table"
+	)
+	if(not dictionaryIsValid) then return nil end
+	
+	local keys: {TKey?}? = DictionaryHelper.GetKeys(dictionary)
+	if(not keys or #keys == 0) then return nil end
+	
+	local random: Random = Random.new()
+	local nextRandomInt: number = random:NextInteger(1, #keys)
+	
+	return keys[nextRandomInt]
+end
+
 return DictionaryHelper

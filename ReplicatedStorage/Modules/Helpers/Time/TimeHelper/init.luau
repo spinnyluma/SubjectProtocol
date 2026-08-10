@@ -45,7 +45,10 @@ function TimeHelper.CreateCountdownInSeconds(numberOfSeconds: number, callbackOn
 		if(callbackOnTick) then
 			local timeRemaining = endTime - currentTime
 			local timeElapsed = numberOfSeconds - timeRemaining
-			callbackOnTick(timeElapsed)
+			local flag = callbackOnTick(timeElapsed)
+			if(flag == TimeConfig.countdownFlags.CancelCountdown.Name) then
+				return false
+			end	
 		end
 		task.wait()
 		currentTime = os.clock()

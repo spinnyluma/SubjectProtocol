@@ -1,21 +1,17 @@
-local ServerStorage = game:GetService("ServerStorage")
-local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local Teams = game:GetService("Teams")
 local CollectionService = game:GetService("CollectionService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+const JointsService = game:GetService("JointsService")
+local ServerStorage = game:GetService("ServerStorage")
 local Players = game:GetService("Players")
-
-
-local HostilityConfig = require(ReplicatedStorage.Modules.Shared.Constants.HostilityConfig)
-
-local HostilitySystemSignals = require(ServerStorage.Modules.ECS.Systems.HostilitySystem.Signals)
-
-local AssertHelper = require(ReplicatedStorage.Modules.Helpers.Debug.AssertHelper)
-local TableHelper = require(ReplicatedStorage.Modules.Helpers.Table.TableHelper)
-local DataModelHelper = require(ReplicatedStorage.Modules.Helpers.DataModel.DataModelHelper)
-
-local ProximityInteractionConfig = require(ServerStorage.Modules.ECS.Systems.ProximityInteractionSystem.Config)
+local Teams = game:GetService("Teams")
 
 local ProximityInteractionSignals = require(ServerStorage.Modules.ECS.Systems.ProximityInteractionSystem.Signals)
+local ProximityInteractionConfig = require(ServerStorage.Modules.ECS.Systems.ProximityInteractionSystem.Config)
+local HostilitySystemSignals = require(ServerStorage.Modules.ECS.Systems.HostilitySystem.Signals)
+local DataModelHelper = require(ReplicatedStorage.Modules.Helpers.DataModel.DataModelHelper)
+local HostilityConfig = require(ReplicatedStorage.Modules.Shared.Constants.HostilityConfig)
+local AssertHelper = require(ReplicatedStorage.Modules.Helpers.Debug.AssertHelper)
+local TableHelper = require(ReplicatedStorage.Modules.Helpers.Table.TableHelper)
 
 local subjectsTeam = Teams.Subjects
 
@@ -61,6 +57,7 @@ local function GetSubjectsOutOfSafeZone(proximityObjects: {[Instance]: {Instance
 		if(not subjectCharacter) then continue end
 		
 		local subjectIsInSafeZoneIndex = table.find(joinedPlayers, subjectCharacter)
+		
 		if(subjectIsInSafeZoneIndex ~= nil) then
 			table.remove(subjectsOutOfSafezone, i)
 		end		
@@ -199,7 +196,6 @@ function HostilitySystem.Initialize()
 		if(interactionType ~= ProximityInteractionConfig.proximityInteractionTypes.T_SafeZone.Name) then
 			return
 		end
-		
 		local playersOutOfSafeZone = GetSubjectsOutOfSafeZone(proximityObjects)
 		local subjectsOutOfSafeZone = TableHelper.FilterTable(playersOutOfSafeZone, function(player: Model)
 			return player.Team == subjectsTeam

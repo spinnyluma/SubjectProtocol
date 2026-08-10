@@ -35,7 +35,7 @@ local function IsAnimationLoadedInAnimator(animator: Animator, animTrack: Animat
 	return SystemManagerModule.GetComponentByEntity("LoadedAnimatorAnims", animTrack) ~= nil
 end
 
-local function InitializeComponentsCleanup()
+local function InitializeComponentsCleanupHandler()
 	local localPlayer = Players.LocalPlayer
 	localPlayer.CharacterRemoving:Connect(function(character: Model)
 		local humanoid = character:FindFirstChildWhichIsA("Humanoid")
@@ -46,11 +46,16 @@ local function InitializeComponentsCleanup()
 		if(not animator) then
 			return
 		end
-		print("Cleaned up!!")
-		print(SystemManagerModule.world["Components"])	
 
+		local loadedAnimatorAnimsCompExists = SystemManagerModule.DoesEntityComponentExist(
+			"LoadedAnimatorAnims",
+			animator
+		)
+		if(not loadedAnimatorAnimsCompExists) then
+			return
+		end
+		
 		SystemManagerModule.RemoveComponent("LoadedAnimatorAnims", animator)
-		print(SystemManagerModule.world["Components"])	
 	end)
 
 	
@@ -81,7 +86,7 @@ function AnimatorLoadingSystem.Initialize()
 		end		
 	end)
 	
-	InitializeComponentsCleanup()
+	InitializeComponentsCleanupHandler()
 end
 
 return AnimatorLoadingSystem

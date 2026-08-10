@@ -431,6 +431,7 @@ function CombatService.IsInstancePartOfDamageableObject(instance: Instance): boo
 end
 
 
+
 --[[
 	Damage a damageable object by a specified amount of damage.
 	
@@ -485,6 +486,87 @@ function CombatService.DamageDamageableObject(instance: Instance, damage: number
 		rootParent:SetAttribute(CombatServiceConfig.HEALTH_ATTR_NAME, healthAttribute - damage)
 	end
 	return rootParent:GetAttribute(CombatServiceConfig.HEALTH_ATTR_NAME)
+end
+
+function CombatService.SpawnHitbox(
+	cframe: CFrame,
+	size: Vector3,
+	overlapParams: OverlapParams
+)
+	local cframeIsValid = AssertHelper.InvalidArgAssert(
+		typeof(cframe) == "CFrame",
+		cframe,
+		"cframe",
+		"CombatService.SpawnHitbox",
+		"CFrame"
+	)
+	if(not cframeIsValid) then return end
+	
+	local sizeIsValid = AssertHelper.InvalidArgAssert(
+		typeof(size) == "Vector3",
+		size,
+		"size",
+		"CombatService.SpawnHitbox",
+		"Vector3"
+	)
+	if(not sizeIsValid) then return end
+	
+	local overlapParamsIsValid = AssertHelper.InvalidArgAssert(
+		typeof(overlapParams) == "OverlapParams",
+		overlapParams,
+		"overlapParams",
+		"CombatService.SpawnHitbox",
+		"OverlapParams"
+	)
+	if(not overlapParamsIsValid) then return end
+	
+	local partsOverlapped: {BasePart?} = workspace:GetPartBoundsInBox(
+		cframe,
+		size,
+		overlapParams
+	)
+	
+	return partsOverlapped
+	
+end
+
+
+
+--[[
+	Checks whether a given instance is a valid damageable target.
+	Returns true if the instance is a character whose humanoid is alive,
+	or if it is a damageable object whose A_Health is greater than 0.
+	Returns false otherwise.
+	
+	@param Instance instance The instance to check.
+	@returns boolean Whether the instance is a valid damageable target.
+]]
+function CombatService.IsValidDamageableTarget(instance: Instance): boolean
+	local instanceIsValid: boolean? = AssertHelper.InvalidArgAssert(
+		typeof(instance) == "Instance",
+		instance,
+		"instance",
+		"CombatService.IsValidDamageableTarget",
+		"Instance"
+	)
+	if(not instanceIsValid) then return false end
+
+	-- Check whether the instance is a character with an alive humanoid.
+	local humanoid: Humanoid? = CharacterHelper.GetHumanoidFromCharacter(instance)
+	if(humanoid and humanoid:IsA("Humanoid") and humanoid.Health > 0) then
+		return true
+	end
+
+	-- Check whether the instance is part of a damageable object with health above 0.
+	local rootParent = DataModelHelper.GetRootParentWithTag(instance, CombatServiceConfig.DAMAGEABLE_TAG_NAME)
+	if(rootParent) then
+		local healthAttribute: number? = rootParent:GetAttribute(CombatServiceConfig.HEALTH_ATTR_NAME)
+		if(type(healthAttribute) == "number" and healthAttribute > 0) then
+			return true
+		end
+	end
+
+	return false
 end
 
 return CombatService

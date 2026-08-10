@@ -17,12 +17,22 @@ local function AddTags(playerCharacter: Model)
 		"Model"
 	)
 	if(not playerCharacterIsValid) then return end
-	
 	CollectionService:AddTag(playerCharacter, PlayerConfig.PLAYER_TAG_NAME)
 end
 
 function PlayerSystem.Initialize()
+	
+	for _, player in Players:GetPlayers() do
+		const character = player.Character
+		if(character) then
+			AddTags(character)
+		end
+		player.CharacterAdded:Connect(function(character)
+			AddTags(character)
+		end)
+	end
 	Players.PlayerAdded:Connect(function(player)
+		print("this should fire")
 		player.CharacterAdded:Connect(function(character)
 			AddTags(character)
 		end)

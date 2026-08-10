@@ -8,4 +8,9 @@ export type RaycastPacket = {
 	InstanceHit: Instance?
 }
 
+export type HitboxPacket = {
+	Weapon: Model,
+	DamageableObjectHit: Model
+}
+
 return WeaponDataConfig
