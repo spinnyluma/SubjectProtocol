@@ -13,21 +13,26 @@ const Table = Helpers.Table
 
 const Constants = Shared.Constants
 
+const Hint = Constants.Hint
+
 const DictionaryHelper = require(Table.DictionaryHelper)
 const DataModelHelper = require(DataModel.DataModelHelper)
 const AssertHelper = require(Debug.AssertHelper)
+const HintConfig = require(Hint.HintConfig)
 
 const SearchableSystemConfig = require("@self/Config")
 
 const ProximityPromptService = game:GetService("ProximityPromptService")
 const Constants = Shared.Constants
+const SearchableConfig = require(Constants.SearchableConfig)
 
 const subjectsTeam = Teams.Subjects
+const sendHintRE = ReplicatedStorage.Assets.Shared.Remotes.Events.SendHint
 
-const SearchableConfig = require(Constants.SearchableConfig)
 
 
 local SearchableSystem = {}
+
 
 local availableItems = {
 	[SearchableSystemConfig.tools.Pipe.Name] = true,
@@ -117,16 +122,15 @@ local function InitializeSearchableContainers()
 		if(not searchableContainer) then return end
 		
 		local itemInstance = filledContainers[searchableContainer]
-		print(itemInstance)
-		if(not itemInstance) then return end
 		
-		local itemInstanceIsValid = AssertHelper.ExpectedValAssert(
-			typeof(itemInstance) == "Instance",
-			itemInstance,
-			"itemInstance",
-			"SearchableSystem.InitializeSearchableContainers",
-			"Instance"
-		)
+		if(not itemInstance) then 
+			sendHintRE:FireClient(playerWhoTriggered, 
+				"Nothing was found.",
+				HintConfig.hintColors.Rejection.Name
+			)
+		end
+		
+		local itemInstanceIsValid = typeof(itemInstance) == "Instance"
 		if(not itemInstanceIsValid) then return end
 		
 		local clonedInstance = itemInstance:Clone()
