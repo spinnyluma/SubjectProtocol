@@ -19,16 +19,17 @@ const Sound = Constants.Sound
 
 const ReplicaShared = Packages.ReplicaShared
 
+const DictionaryHelper = require(Table.DictionaryHelper)
 const AssertHelper = require(Debug.AssertHelper)
 const SoundConfig = require(Sound.SoundConfig)
 const TableHelper = require(Table.TableHelper)
 const ModeConfig = require(Constants.ModeConfig)
 const TimeHelper = require(Time.TimeHelper)
 
+const SoundReplicatoinSystemConfig = require("./SoundReplicationSystem/Config")
 const SoundReplicationService = require("../../Services/Sound/SoundReplicationService")
 const WeaponPortSystemConfig = require("@self/Config")
 const FacilityModeSignals = require("./FacilityModeSystem/Signals")
-const SoundReplicatoinSystemConfig = require("./SoundReplicationSystem/Config")
 
 const grenade = ServerStorage.Assets.Explosives.Grenades.Grenade
 
@@ -169,8 +170,27 @@ local function RemoveThreadFromWeaponSpawnThreads(weaponPort: Model,
 	if(not weaponSpawnThreads[weaponPort][weaponSpawnType]) then
 		return
 	end
-	const weaponSpawnThreadIndex = table.find(weaponSpawnThreads, thread)
+	const weaponSpawnThreadIndex = table.find(weaponSpawnThreads[weaponPort][weaponSpawnType], thread)
+	if(not weaponSpawnThreadIndex) then return end
+	local foundThread = weaponSpawnThreads[weaponPort][weaponSpawnType][weaponSpawnThreadIndex]
+	if(not foundThread) then return end
+	
+	-- Only cancel if it's not the currently running thread
+	if(foundThread ~= coroutine.running()) then
+		task.cancel(foundThread)
+	end
+	
 	table.remove(weaponSpawnThreads[weaponPort][weaponSpawnType], weaponSpawnThreadIndex)
+	
+	if(#weaponSpawnThreads[weaponPort][weaponSpawnType] == 0) then
+		weaponSpawnThreads[weaponPort][weaponSpawnType] = nil
+	end
+	
+	const weaponSpawnTypesDictLen = DictionaryHelper.GetLengthOfDictionary(weaponSpawnThreads[weaponPort])
+	if(weaponSpawnTypesDictLen == 0) then
+		weaponSpawnThreads[weaponPort] = nil
+	end
+	
 end
 
 local function PlayThrowSoundEffect(emittingPart: BasePart)
@@ -207,7 +227,7 @@ local function InitializeWeaponPortSpawning()
 					if(not weaponPortAttachmentIsValid) then return end
 
 					local weaponPortAttach: Attachment? = weaponPortAttachments.WeaponPortAttachment
-					if(not weaponPortAttachments) then return end
+					if(not weaponPortAttach) then return end
 
 					const clonedGrenade = grenade:Clone()
 					clonedGrenade.Parent = workspace
@@ -232,11 +252,28 @@ local function InitializeWeaponPortSpawning()
 	end
 end
 
+local function RemoveAllThreadsFromWeaponSpawnThreads()
+	for weaponPort, weaponSpawnType in weaponSpawnThreads do
+		for weaponSpawnType, spawnThreads in weaponSpawnType do
+			for i = #spawnThreads, 1, -1 do
+				local thread = spawnThreads[i]
+				RemoveThreadFromWeaponSpawnThreads(weaponPort, weaponSpawnType, thread)
+			end		
+		end
+	end
+			
+end
 function WeaponPortSystem.Initialize()
-	InitializeWeaponPortSpawning()
-	--FacilityModeSignals.ModeChanged:Connect(function(newMode: ModeConfig.Mode, oldMode: ModeConfig.Mode)
-		
-	--end)
+	--InitializeWeaponPortSpawning()
+	FacilityModeSignals.ModeChanged:Connect(function(newMode: ModeConfig.Mode, oldMode: ModeConfig.Mode)
+		if(newMode == ModeConfig.modes.FacilityBombardment.Name) then
+			print("Started bombardment")
+			InitializeWeaponPortSpawning()
+		else
+			modeActive = false
+			RemoveAllThreadsFromWeaponSpawnThreads()
+		end
+	end)
 end
 
 return WeaponPortSystem

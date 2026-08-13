@@ -20,10 +20,28 @@ ToolConfig.toolTypes = {
 		Name = "TwoHandedTool",
 		Value = 0,
 		Tag = "T_TwoHandedTool"
+	},
+	OneHandedTool = {
+		Name = "OneHandedTool",
+		Value = 0,
+		Tag = "T_OneHandedTool"
 	}
 }
 
+ToolConfig.activatableTools = {
+	Pipe = {
+		Name = "Pipe",
+		Value = 0,
+		Tag = "A_Pipe"
+	}
+}
 
+ToolConfig.promptAddTools = {
+	Handcuffs = {
+		Name = "Handcuffs",
+		Value = 0
+	}
+}
 
 ToolConfig.toolAnimationConfigs = {
 	Pipe = {

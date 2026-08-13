@@ -35,7 +35,6 @@ end
 
 function ClientSoundReplicationSystem.Initialize()
 	replicateSoundRE.OnClientEvent:Connect(function(soundConfig: SoundConfig.SoundConfig)
-		print(soundConfig)
 		PlaySound(soundConfig)
 	end)
 end

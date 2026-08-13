@@ -32,7 +32,6 @@ function PlayerSystem.Initialize()
 		end)
 	end
 	Players.PlayerAdded:Connect(function(player)
-		print("this should fire")
 		player.CharacterAdded:Connect(function(character)
 			AddTags(character)
 		end)

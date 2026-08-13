@@ -1,28 +1,45 @@
 const CollectionService = game:GetService("CollectionService")
+const ControllerService = game:GetService("ControllerService")
 const ReplicatedStorage = game:GetService("ReplicatedStorage")
+const Players = game:GetService("Players")
 
 const Modules = ReplicatedStorage.Modules
 
+const Utilities = Modules.Utilities
 const Services = Modules.Services
 const Helpers = Modules.Helpers
+const Shared = Modules.Shared
 
 const VFX = Services.VFX
 
 const Debug = Helpers.Debug
 const Time = Helpers.Time
 
+const Constants = Shared.Constants
+
+const Sound = Constants.Sound
+
 const AssertHelper = require(Debug.AssertHelper)
+const SoundConfig = require(Sound.SoundConfig)
+const ModeConfig = require(Constants.ModeConfig)
 const TimeHelper = require(Time.TimeHelper)
 const VfxService = require(VFX.VfxService)
+const t = require(Utilities.t)
 
+const SoundReplicationSystemConfig = require("./SoundReplicationSystem/Config")
+const SoundReplicationService = require("../../Services/Sound/SoundReplicationService")
 const ExplosiveSystemConfig = require("@self/Config")
+const FacilityModeSignals = require("./FacilityModeSystem/Signals")
 const AreaDamageService = require("../../Services/Area/AreaDamageService")
 
 local ExplosiveSystem = {}
 
 const BLAST_PRESSURE = 500_000
-const BLAST_RADIUS = 15
+const BLAST_RADIUS = 19
+const DAMAGE_RADIUS = 20
 const DETONATION_TIME = 3
+
+const GRENADE_DAMAGE = 90
 
 local function ExplodeExplosive(explosive: Model)
 	const explosiveIsValid = AssertHelper.InvalidArgAssert(
@@ -37,15 +54,11 @@ local function ExplodeExplosive(explosive: Model)
 	if(not explosiveIsValid) then return end
 	
 	const primaryPart = explosive.PrimaryPart
-	const primaryPartIsValid = AssertHelper.InvalidArgAssert(
-		typeof(primaryPart) == "Instance"
-			and primaryPart:IsA("BasePart"),
-		primaryPart,
-		"primaryPart",
-		"ExplosiveSystem.Initialize",
-		"BasePart"
-	)
-	if(not primaryPartIsValid) then return end
+	
+	const primPartIsValidFn = t.instanceIsA("BasePart")
+	
+	const primPartIsValid, _ = primPartIsValidFn(primaryPart)
+	if(not primPartIsValid) then explosive:Destroy() return end
 	VfxService.SpawnExplosion({
 		Position = primaryPart.Position,
 		BlastPressure = BLAST_PRESSURE,
@@ -55,7 +68,20 @@ local function ExplodeExplosive(explosive: Model)
 		TimeScale = 1,
 		Visible = true
 	})
-	AreaDamageService.DamageCharacterInRadiusFalloff(chara)
+	AreaDamageService.DamageCharacterInRadiusFalloff(
+		primaryPart.Position,
+		GRENADE_DAMAGE,
+		5.5,
+		DAMAGE_RADIUS
+	)
+	SoundReplicationService.ReplicateSound(Players:GetPlayers(),
+		{
+			SoundId = SoundReplicationSystemConfig.sounds.ExplosionSound1.SoundId,
+			RollOffMinDistance = 10,
+			RollOffMaxDistance = 200,
+			EmittingPosition =  primaryPart.Position
+		}
+	)
 	explosive:Destroy()
 end
 local function InitializeExplosiveHandlers()
@@ -82,6 +108,7 @@ local function InitializeExplosiveHandlers()
 end
 
 function ExplosiveSystem.Initialize()
+	
 	InitializeExplosiveHandlers()
 end
 

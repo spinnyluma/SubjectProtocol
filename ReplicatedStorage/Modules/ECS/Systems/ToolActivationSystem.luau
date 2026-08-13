@@ -324,8 +324,8 @@ local function AddMeleeStateCompFromBackpack(localPlayer: Player)
 	const tools = backpack:GetChildren()
 	for _, tool in tools do
 		if(tool:IsA("Tool")) then
-			const toolType = ToolHelper.GetToolType(tool)
-			if(not toolType) then continue end
+			const toolIsActivatable = ToolConfig.activatableTools[tool.Name]
+			if(not toolIsActivatable) then continue end
 			MeleeStateService.AddMeleeStateComponent(tool)
 
 		end
@@ -355,8 +355,8 @@ local function InitializeMeleeStateComponentsHandler(localPlayer: Player)
 			local state = humanoid:GetState()
 			if(child:IsA("Tool")
 				and state ~= Enum.HumanoidStateType.Dead) then
-				local toolType = ToolHelper.GetToolType(child)
-				if(not toolType) then return end
+				local toolIsActivatable = ToolConfig.activatableTools[child.Name]
+				if(not toolIsActivatable) then return end
 				MeleeStateService.AddMeleeStateComponent(child)
 			end
 		end)
@@ -377,8 +377,8 @@ local function CleanUpToolTrove(tool: Tool)
 		"Tool"
 	)
 	if(not toolIsValid) then return end
-	local toolType = ToolHelper.GetToolType(tool)
-	if(not toolType) then return end
+	const toolIsActivatable = ToolConfig.activatableTools[tool.Name]
+	if(not toolIsActivatable) then return end
 	local trove = toolThreadTroves[tool]
 	if(trove) then
 		trove:Clean()
@@ -408,8 +408,8 @@ local function CleanUpTool(tool: Tool)
 	if(not toolIsValid) then return end
 	
 
-	local toolType = ToolHelper.GetToolType(tool)
-	if(not toolType) then return end
+	const toolIsActivatable = ToolConfig.activatableTools[tool.Name]
+	if(not toolIsActivatable) then return end
 
 	local componentExists = SystemManagerModule.DoesEntityComponentExist("MeleeState", tool)
 	if(componentExists) then
@@ -422,7 +422,6 @@ local function CleanUpOnToolUnequipped(child: Instance)
 	if(child:IsA("Tool")) then
 		local toolType = ToolHelper.GetToolType(child)
 		if(not toolType) then return end
-		print(toolActionConnTroves)		
 		local contextByToolType = InputConfig.inputContextsByToolType[toolType]
 		if(not contextByToolType) then return end
 		InputSystemSignals.InputContextEnabledChanged:Fire(contextByToolType, false)

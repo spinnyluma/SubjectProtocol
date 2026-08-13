@@ -258,7 +258,6 @@ local function AddTerminalContestStateThread(newContestingTeam: Team)
 			
 			ResetTerminalState()
 			contestingConnection:Disconnect()
-			print("subjects have captured the terminal!! now counting down the terminal owner")
 			CancelTerminalOwnerTimePromise()
 			if(terminalOwner == TeamConfig.teams.Subjects.Team) then
 				PerformTerminalOwnerCaptureCountdown()

@@ -237,7 +237,6 @@ local function TweenTerminalCaptureTextVisibility(isVisible: boolean)
 		}
 	)
 	captureTextTransparencyTween:Play()
-	print("playing tween")
 end
 
 local function TweenTerminalOwnerTimeTextVisibility(isVisible: boolean)
