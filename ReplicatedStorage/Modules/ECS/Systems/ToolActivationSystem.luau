@@ -426,10 +426,6 @@ local function CleanUpOnToolUnequipped(child: Instance)
 		if(not contextByToolType) then return end
 		InputSystemSignals.InputContextEnabledChanged:Fire(contextByToolType, false)
 		
-		
-		
-		
-		
 		MeleeStateService.RemoveMeleeStateComponent(child)
 		CleanUpToolTrove(child)
 	end

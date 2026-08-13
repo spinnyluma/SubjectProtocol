@@ -1,11 +1,13 @@
 local CollectionService = game:GetService("CollectionService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local ServerStorage = game:GetService("ServerStorage")
+local RunService = game:GetService("RunService")
 local Players = game:GetService("Players")
 
-local RunService = game:GetService("RunService")
-
 local SystemManagerModuleConstants = require(script.SystemManagerModuleConstants)
+
+const Trove = require("../Utilities/Trove")
+
 local AssertHelper = require(ReplicatedStorage
 	.Modules
 	.Helpers
@@ -803,9 +805,16 @@ function SystemManagerModule.ClearComponentByEntity(componentName: string,
 	for key, val in component do
 		local valIsTable: boolean = type(val) == "table"
 		local valIsInstance: boolean = typeof(val) == "Instance"
-		
-		if(valIsTable) then
+		const valIsTrove = type(val) == "table" 
+			and type(val.Add) == "function"
+			and type(val.Clean) == "function"
+			and type(val.Destroy) == "function"
+		if(valIsTrove) then
+			component[key]:Clean()
+			component[key] = nil
+		elseif(valIsTable) then
 			table.clear(component[key])
+			component[key] = nil
 		elseif(valIsInstance) then
 			component[key]:Destroy()
 			component[key] = nil

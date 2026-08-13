@@ -36,7 +36,7 @@ ToolConfig.activatableTools = {
 	}
 }
 
-ToolConfig.promptAddTools = {
+ToolConfig.promptTools = {
 	Handcuffs = {
 		Name = "Handcuffs",
 		Value = 0
