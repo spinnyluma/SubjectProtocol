@@ -46,7 +46,7 @@ const function InitializeRemovePromptTool(toolPromptInstance: Tool)
 	local promptRemoveHandlerIsValid, promptRemoveHandlerInvalidityReason = t.callback(promptRemoveHandler)
 	if(not promptRemoveHandlerIsValid) then 
 		AssertHelper.Warn(promptRemoveHandlerInvalidityReason)
-		return 
+		return
 	end
 	promptRemoveHandler(toolPromptInstance)
 end
@@ -100,6 +100,7 @@ const function CleanUpBackpackToolsHandlers(player: Player)
 	for _, tool in tools do
 		if(tool:IsA("Tool")) then
 			InitializeRemovePromptTool(tool)
+			SystemManagerModule.RemoveComponent("PromptHandler", tool)
 		end
 	end
 end
@@ -118,20 +119,38 @@ const function CleanUpCharacterToolsHandlers(player: Player)
 	for _, tool in tools do
 		if(tool:IsA("Tool")) then
 			InitializeRemovePromptTool(tool)
+			SystemManagerModule.RemoveComponent("PromptHandler", tool)
 		end
 	end
 end
 
 local function InitializeOnCharRemovingHandlers()
 	const localPlayer = Players.LocalPlayer
-
+	const character = localPlayer.Character
+	if(character) then
+		Promise.try(function()
+			const humanoid: Humanoid = character:WaitForChild("Humanoid")
+			
+			humanoid.Died:Once(function()
+				CleanUpBackpackToolsHandlers(localPlayer)
+				CleanUpCharacterToolsHandlers(localPlayer)
+			end)
+		end)
+			:catch(function(err: any)
+				AssertHelper.Warn(tostring(err))
+			end)
+		
+		
+		
+	end
+	
 	localPlayer.CharacterAdded:Connect(function(character: Model)
 		Promise.try(function()
 			const humanoid = character:WaitForChild("Humanoid")
 			
-			humanoid.Died:Connect(function()
-				CleanUpBackpackToolsHandlers()
-				CleanUpCharacterToolsHandlers()
+			humanoid.Died:Once(function()
+				CleanUpBackpackToolsHandlers(localPlayer)
+				CleanUpCharacterToolsHandlers(localPlayer)
 			end)
 		end)
 			:catch(function(errorMsg: any)

@@ -468,7 +468,7 @@ function ToolActivationSystem.Initialize()
 				"Humanoid"
 			)
 			if(not humanoidIsValid) then return end
-			humanoid.Died:Connect(function()
+			humanoid.Died:Once(function()
 				local backpack = localPlayer.Backpack
 				local tools = backpack:GetChildren()
 				for _, tool in tools do
@@ -516,7 +516,7 @@ function ToolActivationSystem.Initialize()
 				"Humanoid"
 			)
 			if(not humanoidIsValid) then return end
-			humanoid.Died:Connect(function()
+			humanoid.Died:Once(function()
 				local backpack = localPlayer.Backpack
 				local tools = backpack:GetChildren()
 				for _, tool in tools do

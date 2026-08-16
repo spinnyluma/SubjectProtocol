@@ -10,6 +10,8 @@ const Shared = Modules.Shared
 
 const Trove = require(Utilities.Trove)
 
+const ToolService = require("../../Services/Tool/ToolService")
+
 const Character = Helpers.Character
 
 const Debug = Helpers.Debug
@@ -73,7 +75,6 @@ local function ValidatePlayerCuffing(playerCuffing: Player, playerBeingCuffed: P
 	end
 	
 	if playerCuffing == playerBeingCuffed then return end
-	
 	local character1 = playerCuffing.Character
 	if(not character1) then return false end
 	
@@ -217,6 +218,7 @@ const function CuffPlayerToPlayer(playerToCuffTo: Player, playerToCuff: Player)
 		return false
 	end
 	
+	ToolService.StorePlayerTools(playerToCuff)
 	const setupCuffAlignPosition = SetUpCuffAlignPositionForCuffer(playerToCuffTo, playerToCuff)
 	if(not setupCuffAlignPosition) then return end
 	const setupCuffAlignOrientation = SetUpCuffAlignOrientationForCuffer(playerToCuffTo, playerToCuff)
@@ -249,6 +251,46 @@ local function SetUpCuffAttachment(character: Model)
 	attachment.Parent = humanoidRootPart
 end
 
+const function RemovePlayerFromInvolvedInCuffing(player: Player)
+	const playerIsValidFn = t.instanceIsA("Player")
+
+	const playerIsValid, playerInvalidityReason = playerIsValidFn(player)
+	if(not playerIsValid) then
+		AssertHelper.Warn(playerInvalidityReason)
+		return
+	end
+
+	cuffedPlayers[player] = nil
+
+	for cuffer, cuffedPlayer in cuffedPlayers do
+		if(cuffedPlayer == player) then
+			cuffedPlayers[cuffer] = nil
+			return
+		end
+	end
+end
+
+const function UncuffPlayer(player: Player)
+	const playerIsValidFn = t.instanceIsA("Player")
+	local playerIsValid, playerInvalidityReason = playerIsValidFn(player)
+	if not playerIsValid then 
+		AssertHelper.Warn(playerInvalidityReason)
+		return false
+	end
+	
+	const playerIsInvolvedInCuffing = IsPlayerInvolvedInCuffing(player)
+	if not playerIsInvolvedInCuffing then return false end
+	RemovePlayerFromInvolvedInCuffing(player)
+	const playerToCuffCharacter = player.Character
+	if(not playerToCuffCharacter) then return end
+
+	const playerToCuffHrp = playerToCuffCharacter.HumanoidRootPart
+	if(not playerToCuffHrp) then return end
+
+	playerToCuffHrp:SetNetworkOwner(player)
+	ToolService.UnstorePlayerTools(player)
+end
+
 const function InitializeInvolvedCuffPlayersRemoving(playerToCuffTo: Player, playerToCuff: Player)
 	const playerIsValidFn = t.instanceIsA("Player")
 	
@@ -270,10 +312,11 @@ const function InitializeInvolvedCuffPlayersRemoving(playerToCuffTo: Player, pla
 		const playerToCuffHrp: BasePart? = playerToCuffCharacter.HumanoidRootPart
 		if(not playerToCuffHrp) then return end
 		playerToCuffHrp:SetNetworkOwner(playerToCuff)
+		RemovePlayerFromInvolvedInCuffing(playerToCuff)
 	end)
 	
 	const playerToCuffRemoving = playerToCuff.CharacterRemoving:Once(function(character: Model)
-		
+		RemovePlayerFromInvolvedInCuffing(playerToCuffTo)
 	end)
 	
 	if(not involvedCuffedPlayersRemoving[playerToCuffTo]) then
@@ -353,29 +396,25 @@ function CuffSystem.Initialize()
 		
 	
 		const playerCuffingValid = ValidatePlayerCuffing(player, playerToCuff)
-		print("playerCuffingIsVAlid", playerCuffingValid)
-
+		print("player cuffing valid was ", playerCuffingValid)
 		if(not playerCuffingValid) then return end
 		
 		
 		const cuffedIsValid = ValidateCuffed(playerToCuff, cuffed)
-		print("cuffed is valid", cuffedIsValid)
-
-		if(not cuffedIsValid) then print("returning here") return end
-
+		print("cuffed valid was", cuffedIsValid)
+		if(not cuffedIsValid) then return end
 		if(cuffed) then
 			const cufferIsBeingCuffed = IsPlayerInvolvedInCuffing(player)
-			print("cuffer is being cuffed", cufferIsBeingCuffed)
 			if(cufferIsBeingCuffed) then return end
 			const playerCuffedIsInvolvedInCuffing = IsPlayerInvolvedInCuffing(playerToCuff)
 			if(playerCuffedIsInvolvedInCuffing) then return end
 			const cuffSuccessful = CuffPlayerToPlayer(player, playerToCuff)
 			if(not cuffSuccessful) then return end
+			
+			InitializeInvolvedCuffPlayersRemoving(player, playerToCuff)
 			cuffedPlayers[player] = playerToCuff
 		else
-			const playerIsInvolvedInCuffing = IsPlayerInvolvedInCuffing(playerToCuff)
-			if not playerIsInvolvedInCuffing then return false end
-			cuffedPlayers[player] = nil
+			UncuffPlayer(playerToCuff)
 		end
 		
 		

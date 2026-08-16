@@ -51,11 +51,9 @@ function ToolService.StorePlayerTools(player: Player)
 	if not storedTools[player] then
 		storedTools[player] = {}
 	end
-
 	for _, tool in tools do
 		table.insert(storedTools[player], tool)
 	end
-
 	return true
 end
 

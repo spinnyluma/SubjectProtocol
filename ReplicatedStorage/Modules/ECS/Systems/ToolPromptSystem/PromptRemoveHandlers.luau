@@ -44,7 +44,6 @@ local function RemovePromptsForHandcuffs(handcuffs: Tool)
 		return 
 	end
 	for _, guard in guardsTeam:GetPlayers() do
-		print(guard:IsA("Player"))
 		RemoveCuffPrompt(guard)
 	end
 	
@@ -68,7 +67,30 @@ local function RemovePromptsForHandcuffs(handcuffs: Tool)
 		return 
 	end
 	
-	handlersTrove:Clean()
+	for player, trove in handlersTrove do
+		trove:Clean()
+	end
+	
+	const onDeathCleanupHandlersTroves = promptHandlerComp.onDeathCleanupHandlersTroves
+	const onDeathCleanupHandlersTrovesIsValid, onDeathCleanupHandlersTrovesInvalidityReason = t.table(onDeathCleanupHandlersTroves)
+	if not onDeathCleanupHandlersTrovesIsValid then 
+		AssertHelper.Warn(onDeathCleanupHandlersTrovesInvalidityReason)
+		return 
+	end
+	
+	for player, trove in onDeathCleanupHandlersTroves do
+		trove:Clean()
+	end
+	
+	const globalPromptTrove = promptHandlerComp.globalPromptTrove
+	const globalPromptTroveIsValid, globalPromptTroveInvalidityReason = t.table(globalPromptTrove)
+	if not globalPromptTroveIsValid then 
+		AssertHelper.Warn(globalPromptTroveInvalidityReason)
+		return 
+	end
+	
+	globalPromptTrove:Clean()
+	
 end
 
 PromptRemoveHandlers.promptRemoveHandlers = {

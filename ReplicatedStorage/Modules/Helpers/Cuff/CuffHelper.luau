@@ -76,4 +76,50 @@ end
 
 
 
+function CuffHelper.LocalPlayerIsCuffingPlayerByAttachments(localPlayer: Player, targetPlayer: Player)
+	const playerIsValidFn = t.instanceIsA("Player")
+
+	const localPlayerIsValid, localPlayerInvalidityReason = playerIsValidFn(localPlayer)
+	if not localPlayerIsValid then
+		AssertHelper.Warn(localPlayerInvalidityReason)
+		return false
+	end
+
+	const targetPlayerIsValid, targetPlayerInvalidityReason = playerIsValidFn(targetPlayer)
+	if not targetPlayerIsValid then
+		AssertHelper.Warn(targetPlayerInvalidityReason)
+		return false
+	end
+
+	local localCharacter = localPlayer.Character
+	if not localCharacter then return false end
+
+	local localHumanoidRootPart = localCharacter:FindFirstChild("HumanoidRootPart")
+	if not localHumanoidRootPart then return false end
+
+	local cuffAlignPosition = localHumanoidRootPart:FindFirstChild("CuffAlignPosition")
+	if not cuffAlignPosition then return false end
+
+	local cuffAlignOrientation = localHumanoidRootPart:FindFirstChild("CuffAlignOrientation")
+	if not cuffAlignOrientation then return false end
+
+	local targetCharacter = targetPlayer.Character
+	if not targetCharacter then return false end
+
+	local targetHumanoidRootPart = targetCharacter:FindFirstChild("HumanoidRootPart")
+	if not targetHumanoidRootPart then return false end
+
+	local targetRootAttachment = targetHumanoidRootPart:FindFirstChild("RootAttachment")
+	if not targetRootAttachment then return false end
+
+	local alignPositionAttachment0 = cuffAlignPosition.Attachment0
+	local alignOrientationAttachment0 = cuffAlignOrientation.Attachment0
+
+	if not alignPositionAttachment0 or not alignOrientationAttachment0 then
+		return false
+	end
+
+	return alignPositionAttachment0 == targetRootAttachment and alignOrientationAttachment0 == targetRootAttachment
+end
+
 return CuffHelper

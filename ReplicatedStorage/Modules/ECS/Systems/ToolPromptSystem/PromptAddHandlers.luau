@@ -23,6 +23,7 @@ const CharacterHelper = require("../../../Helpers/Character/CharacterHelper")
 const DataModelHelper = require("../../../Helpers/DataModel/DataModelHelper")
 const AssertHelper = require("../../../Helpers/Debug/AssertHelper")
 const CuffHelper = require("../../../Helpers/Cuff/CuffHelper")
+const Trove = require("../../../Utilities/Trove")
 
 local PromptAddHandlers = {}
 
@@ -31,25 +32,71 @@ const subjectsTeam = Teams.Subjects
 
 const setPlayerCuffedStateRE = ReplicatedStorage.Assets.Shared.Remotes.Events.SetPlayerCuffedState
 
+const function RemoveCuffConstraints(localPlayer: Player)
+	const playerIsValidFn = t.instanceIsA("Player")
 
+	local playerIsValid, playerInvalidityReason = playerIsValidFn(localPlayer)
+	if not playerIsValid then 
+		AssertHelper.Warn(playerInvalidityReason)
+		return false
+	end
 
+	local character = localPlayer.Character
+	if not character then return false end
 
-const function AddCuffPrompt(player: Player)
+	Promise.try(function()
+		local humanoidRootPart = character:WaitForChild("HumanoidRootPart")
+		if not humanoidRootPart then return false end
+
+		local cuffAlignPosition = humanoidRootPart:FindFirstChild("CuffAlignPosition")
+		if not cuffAlignPosition then return false end
+
+		local cuffAlignOrientation = humanoidRootPart:FindFirstChild("CuffAlignOrientation")
+		if(not cuffAlignOrientation) then return false end
+
+		cuffAlignPosition:Destroy()
+		cuffAlignOrientation:Destroy()
+	end)
+
+end
+
+const function AddCuffPrompt(player: Player, handcuffs: Tool)
 	const playerIsValidFn = t.instanceIsA("Player")
 	const playerIsValid, playerInvalidityReason = playerIsValidFn(player)
-	if not playerIsValid then return end
+	if not playerIsValid then 
+		AssertHelper.Warn(playerInvalidityReason)
+		return 
+	end
+	
+	const handcuffsIsValidFn = t.instanceIsA("Tool")
+	const handcuffsIsValid, handcuffsInvalidityReason = handcuffsIsValidFn(handcuffs)
+	if(not handcuffsIsValid) then
+		AssertHelper.Warn(handcuffsInvalidityReason)
+		return
+	end
 	
 	local character = player.Character
 	if not character then return end
 	
 	
 	const humanoidRootPart = character:WaitForChild("HumanoidRootPart")
+	const humanoid: Humanoid = character:WaitForChild("Humanoid")
+	
+
+	const promptHandlerComp = SystemManagerModule.GetComponentByEntity("PromptHandler", handcuffs)
+	if not promptHandlerComp then return end
+	
+	const playerPromptHandlerTrove = promptHandlerComp.handlersTrove
+	const playerPromptHandlerTroveIsValid, playerPromptHandlerTroveInvalidityReason = t.table(playerPromptHandlerTrove)
+	
+	if not playerPromptHandlerTroveIsValid then
+		AssertHelper.Warn(playerPromptHandlerTroveInvalidityReason)
+		return 
+	end
 	
 	const prompt = Instance.new("ProximityPrompt")
 	
 	const localPlayer = Players.LocalPlayer
-	
-	
 	
 	prompt.Name = "CuffPrompt"
 	CollectionService:AddTag(prompt, ToolPromptSystemConfig.CUFF_PROMPT_TAG)
@@ -66,38 +113,10 @@ const function AddCuffPrompt(player: Player)
 	prompt.RequiresLineOfSight = false
 	prompt.MaxActivationDistance = 10
 	prompt.Parent = humanoidRootPart
-	
 	return prompt
-		
 end
 
-const function RemoveCuffConstraints(localPlayer: Player)
-	const playerIsValidFn = t.instanceIsA("Player")
-	
-	local playerIsValid, playerInvalidityReason = playerIsValidFn(localPlayer)
-	if not playerIsValid then 
-		AssertHelper.Warn(playerInvalidityReason)
-		return false
-	end
-	
-	local character = localPlayer.Character
-	if not character then return false end
-	
-	Promise.try(function()
-		local humanoidRootPart = character:WaitForChild("HumanoidRootPart")
-		if not humanoidRootPart then return false end
 
-		local cuffAlignPosition = humanoidRootPart:WaitForChild("CuffAlignPosition")
-		if not cuffAlignPosition then return false end
-		
-		local cuffAlignOrientation = humanoidRootPart:WaitForChild("CuffAlignOrientation")
-		if(not cuffAlignOrientation) then return false end
-		
-		cuffAlignPosition:Destroy()
-		cuffAlignOrientation:Destroy()
-	end)
-
-end
 
 const function GetPlayersForPromptAdd(localPlayer: Player)
 	const playerIsValidFn = t.instanceIsA("Player")
@@ -158,15 +177,26 @@ const function AddPromptsForHandcuffs(handcuffs: Tool)
 		return
 	end
 	
-	const promptHandlersTrove = promptHandlerComponent.handlersTrove
-	const promptHandlersTroveIsValid, 
-		promptHandlersTroveInvalidityReason = t.table(promptHandlersTrove)
-	if(not promptHandlersTroveIsValid) then
-		AssertHelper.Warn(promptHandlersTroveInvalidityReason)
+	const promptHandlersTroves = promptHandlerComponent.handlersTrove
+	const promptHandlersTrovesIsValid, 
+		promptHandlersTrovesInvalidityReason = t.table(promptHandlersTroves)
+	if(not promptHandlersTrovesIsValid) then
+		AssertHelper.Warn(promptHandlersTrovesInvalidityReason)
 		return
 	end
 	
+	const onDeathCleanupHandlersTroves = promptHandlerComponent.onDeathCleanupHandlersTroves
+	const onDeathCleanupHandlersTrovesIsValid, onDeathCleanupHandlersTrovesInvalidityReason = t.table(onDeathCleanupHandlersTroves)
+	if(not onDeathCleanupHandlersTrovesIsValid) then
+		AssertHelper.Warn(onDeathCleanupHandlersTrovesInvalidityReason)
+		return
+	end
 	
+	const globalPromptTrove = promptHandlerComponent.globalPromptTrove
+	const globalPromptTroveIsValid, globalPromptTroveInvalidityReason = t.table(globalPromptTrove)
+	if(not globalPromptTroveIsValid) then
+		AssertHelper.Warn(globalPromptTroveInvalidityReason)
+		return end
 	
 	const localPlayer = Players.LocalPlayer
 	const addPromptPlayers: {Player?}? = GetPlayersForPromptAdd(localPlayer)
@@ -175,38 +205,107 @@ const function AddPromptsForHandcuffs(handcuffs: Tool)
 	const teamForPromptAdd: Team? = GetTeamForPromptAdd(localPlayer)
 	if(not teamForPromptAdd) then return end
 	for _, player in addPromptPlayers do
+		if(not promptHandlersTroves[player]) then
+			promptHandlersTroves[player] = Trove.new()
+		end
+		
+		const promptHandlersTrove = promptHandlersTroves[player]
+		const promptHandlersTroveIsValid, promptHandlersTroveInvalidityReason = t.table(promptHandlersTrove)
+		if(not promptHandlersTroveIsValid) then
+			AssertHelper.Warn(promptHandlersTroveInvalidityReason)
+			continue			
+		end
+		const promptAddOnCharAddedConn = player.CharacterAdded:Connect(function(character: Model)
+			Promise.try(function()
+				const prompt: ProximityPrompt? = AddCuffPrompt(player, handcuffs)			
+			end)
+				:catch(function(err)
+					AssertHelper.Warn(tostring(err))
+				end)
+		end)
 		Promise.try(function()
-			const prompt: ProximityPrompt? = AddCuffPrompt(player)			
+			const localCharacter = localPlayer.Character
+			if(not localCharacter) then return end
+
+			const targetCharacter = player.Character
+			if(not targetCharacter) then return end
+
+
+			local targetHumanoid = targetCharacter:WaitForChild("Humanoid")
+			if(not targetHumanoid) then return end
+
+			const handlersTroveIsValid, handlersTroveInvalidityReason = t.table(promptHandlersTrove)
+			if(not handlersTroveIsValid) then
+				AssertHelper.Warn(handlersTroveInvalidityReason)
+				return
+			end
+			const prompt: ProximityPrompt? = AddCuffPrompt(player, handcuffs)			
 			if(not prompt) then return end
 			
-			const character = localPlayer.Character
-			if(not character) then return end
-			const humanoid = CharacterHelper.GetHumanoidFromCharacter(character)
-			if(not humanoid) then return end
-			
-			const humanoidDiedConn = humanoid.Died:Once(function()
-				prompt.Text = "Cuff Player"
+			if(not onDeathCleanupHandlersTroves[player]) then
+				onDeathCleanupHandlersTroves[player] = Trove.new()
+			end
+			const targetHumanoidDiedConn = targetHumanoid.Died:Once(function()
+				RemoveCuffConstraints(localPlayer)
+				print(SystemManagerModule.world["Components"]["PromptHandler"])
+				print("tried to clena up on death")
+				const targetPlayerTrove = onDeathCleanupHandlersTroves[player]
+				const targetPlayerTroveIsValid, targetPlayerTroveInvalidityReason = t.table(targetPlayerTrove)
+				if(not targetPlayerTroveIsValid) then
+					AssertHelper.Warn(targetPlayerTroveInvalidityReason)
+					return 
+				end
+				targetPlayerTrove:Clean()
 			end)
-			promptHandlersTrove:Add(humanoidDiedConn)
-			
+			const targetPlayerTrove = onDeathCleanupHandlersTroves[player]
+			targetPlayerTrove:Add(targetHumanoidDiedConn)
 		end)
 			:catch(function(err)
 				AssertHelper.Warn(tostring(err))
-				
 			end)
+		
+		promptHandlersTrove:Add(promptAddOnCharAddedConn)
 	end
 	
 	const playerAddedConn = teamForPromptAdd.PlayerAdded:Connect(function(player: Player)
-		AddCuffPrompt(player)
+		if(not promptHandlersTroves[player]) then
+			promptHandlersTroves[player] = Trove.new()
+		end
+
+		const promptHandlersTrove = promptHandlersTroves[player]
+		const promptHandlersTroveIsValid, promptHandlersTroveInvalidityReason = t.table(promptHandlersTrove)
+		if(not promptHandlersTroveIsValid) then
+			AssertHelper.Warn(promptHandlersTroveInvalidityReason)
+			return			
+		end
+		AddCuffPrompt(player, handcuffs)
 		
-		const character = localPlayer.Character
-		if(not character) then return end
-		const humanoid = CharacterHelper.GetHumanoidFromCharacter(character)
-		if(not humanoid) then return end
-		const humanoidDiedConn = humanoid.Died:Once(function()
-			prompt.Text = "Cuff Player"
-		end)
-		promptHandlersTrove:Add(humanoidDiedConn)
+		const promptAddOnCharAddedConn = player.CharacterAdded:Connect(function(character: Model)
+			Promise.try(function()
+				const prompt: ProximityPrompt? = AddCuffPrompt(player, handcuffs)			
+				const targetCharacterHumanoid: Humanoid = character:WaitForChild("Humanoid")
+				if(not onDeathCleanupHandlersTroves[player]) then
+					onDeathCleanupHandlersTroves[player] = Trove.new()
+				end
+				const targetHumanoidDiedConn = targetCharacterHumanoid.Died:Once(function()
+					RemoveCuffConstraints(localPlayer)
+					const targetPlayerTrove = onDeathCleanupHandlersTroves[player]
+					const targetPlayerTroveIsValid, targetPlayerTroveInvalidityReason = t.table(targetPlayerTrove)
+					if(not targetPlayerTroveIsValid) then
+						AssertHelper.Warn(targetPlayerTroveInvalidityReason)
+						return 
+					end
+					targetPlayerTrove:Clean()
+					
+				end)
+				const targetPlayerTrove = onDeathCleanupHandlersTroves[player]
+				targetPlayerTrove:Add(targetHumanoidDiedConn)
+			end)
+				:catch(function(err)
+					AssertHelper.Warn(tostring(err))
+				end)
+		end)		
+		promptHandlersTrove:Add(promptAddOnCharAddedConn)
 	end)
 	const promptTriggeredConn = ProximityPromptService.PromptTriggered:Connect(function(prompt: ProximityPrompt, playerWhoTriggered: Player)
 		const hasCuffPromptTag = CollectionService:HasTag(prompt, ToolPromptSystemConfig.CUFF_PROMPT_TAG)
@@ -215,18 +314,21 @@ const function AddPromptsForHandcuffs(handcuffs: Tool)
 		const parentCharacter = DataModelHelper.GetRootParentWithTag(prompt, CharacterConfig.CHARACTER_TAG_NAME)
 		if(not parentCharacter) then return end
 		
+		const characterIsDead = CharacterHelper.IsCharacterDead(parentCharacter)
+		if(characterIsDead) then return end
 		const player = Players:GetPlayerFromCharacter(parentCharacter)
 		if(not player) then return end
 		
+		
+		
 		Promise.try(function()
 			const localPlayerIsCuffing: boolean = CuffHelper.LocalPlayerIsCuffing(localPlayer)
-			print("player is cuffing", localPlayerIsCuffing)
-			if(localPlayerIsCuffing) then
+			const localPlayerIsCuffingTargetCharacter: boolean = CuffHelper.LocalPlayerIsCuffingPlayerByAttachments(localPlayer, player)
+			if(localPlayerIsCuffing and localPlayerIsCuffingTargetCharacter) then
 				RemoveCuffConstraints(localPlayer)
 				prompt.ActionText = "Cuff Player"
 				setPlayerCuffedStateRE:FireServer(player, false)
-			else
-				print("went hereeeeeeee")
+			elseif(not localPlayerIsCuffing and not localPlayerIsCuffingTargetCharacter) then
 				prompt.ActionText = "Release Player"
 				setPlayerCuffedStateRE:FireServer(player, true)
 
@@ -235,10 +337,54 @@ const function AddPromptsForHandcuffs(handcuffs: Tool)
 			:catch(function(err)
 				AssertHelper.Warn(tostring(err))
 			end)
-		
+	
 	end)
-	promptHandlersTrove:Add(playerAddedConn)
-	promptHandlersTrove:Add(promptTriggeredConn)
+	
+	Promise.try(function()
+		const localCharacter = localPlayer.Character
+		if(not localCharacter) then return end
+		const localHumanoid = localCharacter:WaitForChild("Humanoid")
+		localHumanoid.Died:Once(function()
+			RemoveCuffConstraints(localPlayer)
+		end)		
+	end)
+		:catch(function(err: any)
+			AssertHelper.Warn(tostring(err))
+		end)
+	
+	const playerRemovingConn = Players.PlayerRemoving:Connect(function(player: Player)
+		const promptHandlerComp: PromptHandlerComponent.PromptHandlerComponent = SystemManagerModule.GetComponentByEntity("PromptHandler", handcuffs)
+		if(not promptHandlerComp) then return end
+		
+		
+		local handlersTroves = promptHandlerComp.handlersTrove
+		local handlersTrovesIsValid, handlersTrovesInvalidityReason = t.table(handlersTroves)
+		if(not handlersTrovesIsValid) then
+			AssertHelper.Warn(handlersTrovesInvalidityReason)
+			return
+		end
+		
+		local handlersTrove = promptHandlerComp[player]
+		if(handlersTrove) then
+			handlersTrove:Clean()
+			handlersTroves[player] = nil
+		end
+		
+		const onDeathCleanupTroves = promptHandlerComp.onDeathCleanupHandlersTroves
+		local onDeathCleanupHandlersTrovesIsValid, onDeathCleanupHandlersTrovesInvalidityReason = t.table(onDeathCleanupHandlersTroves)
+		if(not onDeathCleanupHandlersTrovesIsValid) then
+			AssertHelper.Warn(onDeathCleanupHandlersTrovesInvalidityReason)
+			return
+		end
+		
+		local onDeathCleanupHandlersTrove = onDeathCleanupHandlersTroves[player]
+		if(onDeathCleanupHandlersTrove) then
+			onDeathCleanupHandlersTrove:Clean()
+			onDeathCleanupHandlersTroves[player] = nil
+		end
+	end)
+	globalPromptTrove:Add(playerAddedConn)
+	globalPromptTrove:Add(promptTriggeredConn)
 end
 
 

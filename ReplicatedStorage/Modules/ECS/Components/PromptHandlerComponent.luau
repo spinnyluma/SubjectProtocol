@@ -3,12 +3,16 @@ const Trove = require("../../Utilities/Trove")
 local PromptHandlerComponent = {}
 
 export type PromptHandlerComponent = {
-	handlersTrove: Trove.Trove
+	globalPromptTrove: Trove.Trove,
+	handlersTrove: {[Player]: Trove.Trove},
+	onDeathCleanupHandlersTroves: {[Player]: Trove.Trove}
 }
 
 function PromptHandlerComponent.new()
 	return {
-		handlersTrove = Trove.new()
+		globalPromptTrove = Trove.new(),
+		handlersTrove = {},
+		onDeathCleanupHandlersTroves = {}
 	}
 end
 

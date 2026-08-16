@@ -7,6 +7,7 @@ const Utilities = Modules.Utilities
 
 const Promise = require(Utilities.Promise)
 
+const SystemManagerModule = require("../SystemManagerModule")
 const AssertHelper = require("../../Helpers/Debug/AssertHelper")
 
 const setupCuffConstraintRE = ReplicatedStorage.Assets.Shared.Remotes.Events.SetupCuffConstraint
@@ -39,7 +40,6 @@ function ClientCuffSystem.Initialize()
 	setupCuffConstraintRE.OnClientEvent:Connect(function(playerToCuff: Player, constraintType: string)
 		if not playerToCuff then return end
 		if not constraintType then return end
-		
 		local localPlayer = Players.LocalPlayer
 		if not localPlayer then return end
 		
@@ -63,7 +63,10 @@ function ClientCuffSystem.Initialize()
 			elseif constraintType == Config.constraintTypes.AlignOrientation.Name then
 				SpawnAlignOrientation(cuffAttachment, targetRootAttachment, localHRP)
 			end
+			
+			
 		end)
+			
 			:catch(function(err)
 				AssertHelper.Warn(tostring(err))
 			end)
