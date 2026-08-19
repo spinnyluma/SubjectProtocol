@@ -1,26 +1,25 @@
 local CollectionService = game:GetService("CollectionService")
-local UserInputService = game:GetService("UserInputService")
-local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local UserInputService = game:GetService("UserInputService")
+local Players = game:GetService("Players")
 
-local ClientRaycastWeaponConfig = require(script.Config)
-local WeaponDataConfig = require(ReplicatedStorage.Modules.Shared.Constants.WeaponDataConfig)
-
-local InputSignals = require(ReplicatedStorage.Modules.ECS.Systems.InputSystem.Signals)
-
-local AssertHelper = require(ReplicatedStorage.Modules.Helpers.Debug.AssertHelper)
-local CharacterHelper = require(ReplicatedStorage.Modules.Helpers.Character.CharacterHelper)
 local RaycastParamsHelper = require(ReplicatedStorage.Modules.Helpers.SpatialQuery.RaycastParamsHelper)
+local SpatialQueryConfig = require(ReplicatedStorage.Modules.Shared.Constants.SpatialQueryConfig)
+local WeaponDataConfig = require(ReplicatedStorage.Modules.Shared.Constants.WeaponDataConfig)
+local CharacterHelper = require(ReplicatedStorage.Modules.Helpers.Character.CharacterHelper)
+local CombatService = require(ReplicatedStorage.Modules.Services.Combat.CombatService)
+local AssertHelper = require(ReplicatedStorage.Modules.Helpers.Debug.AssertHelper)
+local InputSignals = require(ReplicatedStorage.Modules.ECS.Systems.InputSystem.Signals)
 local TableHelper = require(ReplicatedStorage.Modules.Helpers.Table.TableHelper)
 local UiHelper = require(ReplicatedStorage.Modules.Helpers.UI.UiHelper)
-
-local CombatService = require(ReplicatedStorage.Modules.Services.Combat.CombatService)
-
-local SpatialQueryConfig = require(ReplicatedStorage.Modules.Shared.Constants.SpatialQueryConfig)
 local Promise = require(ReplicatedStorage.Modules.Utilities.Promise)
 local Trove = require(ReplicatedStorage.Modules.Utilities.Trove)
 
+local ClientRaycastWeaponConfig = require(script.Config)
+
+const ClientSoundReplicationService = require("../../Services/SoundReplication/ClientSoundReplicationService")
+const ClientSoundService = require("../../Services/Sound/ClientSoundService")
+const SoundConfig = require("../../Shared/Constants/Sound/SoundConfig")
 
 local usingRaycastWeaponInputContext: InputContext = ReplicatedStorage.Assets.Input.Contexts.UsingRaycastWeapon
 
@@ -202,6 +201,7 @@ local function FireRaycastWeaponFromMousePosition(weapon: Tool)
 			EndPosition = realFiringEndPosition,
 			InstanceHit = instanceHit
 		}
+		ClientSoundReplicationService.PlaySoundFromPosition(head.Position, SoundConfig.clientSoundConfigs.Gun.PistolGunshot)
 		fireRayRE:FireServer(raycastPacket)
 		return Promise.resolve()
 	end)

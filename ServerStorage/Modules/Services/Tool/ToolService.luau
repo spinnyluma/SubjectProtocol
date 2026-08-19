@@ -57,6 +57,51 @@ function ToolService.StorePlayerTools(player: Player)
 	return true
 end
 
+function ToolService.GiveTool(player: Player, tool: Tool)
+	const playerIsValidFn = t.instanceIsA("Player")
+	const playerIsValid, playerInvalidityReason = playerIsValidFn(player)
+	if not playerIsValid then
+		AssertHelper.Warn(playerInvalidityReason)
+		return false
+	end
+
+	const toolIsValidFn = t.instanceIsA("Tool")
+	const toolIsValid, toolInvalidityReason = toolIsValidFn(tool)
+	if not toolIsValid then
+		AssertHelper.Warn(toolInvalidityReason)
+		return false
+	end
+
+	local backpack = player:FindFirstChildOfClass("Backpack")
+	const backpackIsValidFn = t.instanceIsA("Backpack")
+	const backpackIsValid, backpackInvalidityReason = backpackIsValidFn(backpack)
+	if not backpackIsValid then
+		AssertHelper.Warn(backpackInvalidityReason)
+		return false
+	end
+
+	-- Check if the player already has a tool with the same name (backpack or equipped)
+	for _, child in backpack:GetChildren() do
+		if child:IsA("Tool") and child.Name == tool.Name then
+			return false
+		end
+	end
+
+	local character = player.Character
+	if character then
+		for _, child in character:GetChildren() do
+			if child:IsA("Tool") and child.Name == tool.Name then
+				return false
+			end
+		end
+	end
+
+	-- Player doesn't have it yet — clone and give it
+	local clonedTool = tool:Clone()
+	clonedTool.Parent = backpack
+	return true
+end
+
 function ToolService.UnstorePlayerTools(player: Player)
 	const playerIsValidFn = t.instanceIsA("Player")
 	const playerIsValid, playerInvalidityReason = playerIsValidFn(player)

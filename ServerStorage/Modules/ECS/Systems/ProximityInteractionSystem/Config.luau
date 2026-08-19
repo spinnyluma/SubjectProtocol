@@ -6,7 +6,8 @@ local Config = {}
 Config.parentTagNames = {
 	T_Keycard = "T_SecurityDoor",
 	T_Terminal = "T_Player",
-	T_SafeZone = "T_Player"
+	T_SafeZone = "T_Player",
+	T_CellImprisonment = "T_Player"
 }
 
 
@@ -22,6 +23,10 @@ Config.proximityInteractionTypes = {
 	T_SafeZone = {
 		Name = "T_SafeZone",
 		Value = 2
+	},
+	T_CellImprisonment = {
+		Name = "T_CellImprisonment",
+		Value = 3
 	}
 }
 

@@ -1,15 +1,31 @@
 const ReplicatedStorage = game:GetService("ReplicatedStorage")
 const Players = game:GetService("Players")
+const Teams = game:GetService("Teams")
+const ServerStorage = game:GetService("ServerStorage")
 
 const setPlayerCuffedStateRE = ReplicatedStorage.Assets.Shared.Remotes.Events.SetPlayerCuffedState
 const Modules = ReplicatedStorage.Modules
 
+const Framework = Modules.Framework
 const Utilities = Modules.Utilities
 const Helpers = Modules.Helpers
 const Shared = Modules.Shared
+const ECS = Modules.ECS
 
+const Constants = Shared.Constants
+const Packages = Shared.Packages
+
+const ReplicaShared = Packages.ReplicaShared
+
+const SystemManagerModule = require(ECS.SystemManagerModule)
+const ModuleLoader = require(Framework.ModuleLoader)
+const ModeConfig = require(Constants.ModeConfig)
 const Trove = require(Utilities.Trove)
+const Maid = require(ReplicaShared.Maid)
 
+const FacilityModeSystemSignals = require("./FacilityModeSystem/Signals")
+const HostilitySystemSignals = require("./HostilitySystem/Signals")
+const CuffService = require("../../Services/Cuff/CuffService")
 const ToolService = require("../../Services/Tool/ToolService")
 
 const Character = Helpers.Character
@@ -25,15 +41,19 @@ const ToolConfig = require(Constants.ToolConfig)
 const ToolHelper = require(Tool.ToolHelper)
 const t = require(Utilities.t)
 
+const handcuffsTool = ServerStorage.Assets.Tools.Cuffs.Handcuffs
+
 local CuffSystem = {}
 
 const ACCEPTABLE_CUFFING_DISTANCE = 20
 
 const setupCuffConstraintRE = ReplicatedStorage.Assets.Shared.Remotes.Events.SetupCuffConstraint
 
-local cuffedPlayers: {[Player]: Player} = {}
+const subjectsTeam = Teams.Subjects
 
 const involvedCuffedPlayersRemoving: {[Player]: Trove.Trove} = {}
+
+local subjectsTeamGiveHandcuffsConn: RBXScriptConnection? = nil
 
 local function IsPlayerInvolvedInCuffing(player: Player)
 	const playerIsValidFn = t.instanceIsA("Player")
@@ -43,12 +63,14 @@ local function IsPlayerInvolvedInCuffing(player: Player)
 		return true
 	end
 	
-	const playerIsCuffing = cuffedPlayers[player]
+	
+	const globalCuffedPlayers = SystemManagerModule.GetGlobalGameState("CuffedPlayers")
+	if not globalCuffedPlayers then return false end
+	
+	const playerIsCuffing = globalCuffedPlayers[player]
 	
 	if not playerIsCuffing then 
-		print("not player is cuffing")
-		print(cuffedPlayers)
-		for _, cuffedPlayer in cuffedPlayers do
+		for _, cuffedPlayer in globalCuffedPlayers do
 			if cuffedPlayer == player then
 				return true
 			end
@@ -95,8 +117,6 @@ local function ValidatePlayerCuffing(playerCuffing: Player, playerBeingCuffed: P
 	
 	const playerBeingCuffedDead = CharacterHelper.IsCharacterDead(character2)
 	if playerBeingCuffedDead then return false end
-	
-	
 	
 	return true
 end
@@ -251,25 +271,6 @@ local function SetUpCuffAttachment(character: Model)
 	attachment.Parent = humanoidRootPart
 end
 
-const function RemovePlayerFromInvolvedInCuffing(player: Player)
-	const playerIsValidFn = t.instanceIsA("Player")
-
-	const playerIsValid, playerInvalidityReason = playerIsValidFn(player)
-	if(not playerIsValid) then
-		AssertHelper.Warn(playerInvalidityReason)
-		return
-	end
-
-	cuffedPlayers[player] = nil
-
-	for cuffer, cuffedPlayer in cuffedPlayers do
-		if(cuffedPlayer == player) then
-			cuffedPlayers[cuffer] = nil
-			return
-		end
-	end
-end
-
 const function UncuffPlayer(player: Player)
 	const playerIsValidFn = t.instanceIsA("Player")
 	local playerIsValid, playerInvalidityReason = playerIsValidFn(player)
@@ -280,7 +281,7 @@ const function UncuffPlayer(player: Player)
 	
 	const playerIsInvolvedInCuffing = IsPlayerInvolvedInCuffing(player)
 	if not playerIsInvolvedInCuffing then return false end
-	RemovePlayerFromInvolvedInCuffing(player)
+	CuffService.RemovePlayerFromInvolvedInCuffing(player)
 	const playerToCuffCharacter = player.Character
 	if(not playerToCuffCharacter) then return end
 
@@ -312,11 +313,11 @@ const function InitializeInvolvedCuffPlayersRemoving(playerToCuffTo: Player, pla
 		const playerToCuffHrp: BasePart? = playerToCuffCharacter.HumanoidRootPart
 		if(not playerToCuffHrp) then return end
 		playerToCuffHrp:SetNetworkOwner(playerToCuff)
-		RemovePlayerFromInvolvedInCuffing(playerToCuff)
+		CuffService.RemovePlayerFromInvolvedInCuffing(playerToCuff)
 	end)
 	
 	const playerToCuffRemoving = playerToCuff.CharacterRemoving:Once(function(character: Model)
-		RemovePlayerFromInvolvedInCuffing(playerToCuffTo)
+		CuffService.RemovePlayerFromInvolvedInCuffing(playerToCuffTo)
 	end)
 	
 	if(not involvedCuffedPlayersRemoving[playerToCuffTo]) then
@@ -346,7 +347,11 @@ const function ValidateCuffed(playerToCuff: Player, cuffed: boolean)
 		return false
 	end
 	
-	
+	const globalCuffedPlayers = SystemManagerModule.GetGlobalGameState("CuffedPlayers")
+	print(globalCuffedPlayers)
+	if(not globalCuffedPlayers) then
+		return false
+	end
 	if(cuffed) then
 		--[[
 			For the cuffed to be valid,
@@ -354,15 +359,17 @@ const function ValidateCuffed(playerToCuff: Player, cuffed: boolean)
 			because the player can only cuff one player at a time
 			
 		]]
-		
+		const currentFacilityMode = SystemManagerModule.GetGlobalGameState("CurrentMode")
+		if(currentFacilityMode ~= ModeConfig.modes.RoleReversal.Name) then return false end
 		local playerToCuffFound: boolean? = false
-		for playerCuffing, playerCuffed in cuffedPlayers do
+		for playerCuffing, playerCuffed in globalCuffedPlayers do
 			if(playerToCuff == playerCuffing
 				or playerToCuff == playerCuffed) then
 				playerToCuffFound = true
 				break
 			end
 		end
+		
 		return playerToCuffFound ~= true
 	else
 		--[[
@@ -370,12 +377,14 @@ const function ValidateCuffed(playerToCuff: Player, cuffed: boolean)
 			because we don't wnat to be uncuffing a player that is not even cuffed
 		]]
 		local playerIsCuffed: boolean? = false
-		for _, playerCuffed in cuffedPlayers do
+		for _, playerCuffed in globalCuffedPlayers do
 			if(playerCuffed == playerToCuff) then
 				playerIsCuffed = true
 				break
 			end
 		end
+		
+		
 		return playerIsCuffed ~= false
 	end
 	
@@ -383,9 +392,49 @@ const function ValidateCuffed(playerToCuff: Player, cuffed: boolean)
 end
 
 
-
+const function InitializeCuffEquippedHandler()
+	
+	for _, player in Players:GetPlayers() do
+		player.CharacterAdded:Connect(function(character: Model)
+			character.ChildAdded:Connect(function(child: Instance)
+				if(child:IsA("Tool")
+					and child.Name == "Handcuffs") then
+					HostilitySystemSignals.HostilityRequested:Fire(player)	
+				end
+			end)
+		end)
+	end
+	
+	Players.PlayerAdded:Connect(function(player: Player)
+		player.CharacterAdded:Connect(function(character: Model)
+			character.ChildAdded:Connect(function(child: Instance)
+				if(child:IsA("Tool")
+					and child.Name == "Handcuffs") then
+					HostilitySystemSignals.HostilityRequested:Fire(player)	
+				end
+			end)
+		end)
+	end)
+end
 
 function CuffSystem.Initialize()
+	FacilityModeSystemSignals.ModeChanged:Connect(function(newMode: ModeConfig.Mode, oldMode: ModeConfig.Mode)
+		if(newMode == ModeConfig.modes.RoleReversal.Name) then
+			for _, player in subjectsTeam:GetPlayers() do
+				ToolService.GiveTool(player, handcuffsTool)
+			end
+			subjectsTeamGiveHandcuffsConn = subjectsTeam.PlayerAdded:Connect(function(player: Player)
+				ToolService.GiveTool(player, handcuffsTool)
+			end)
+		else
+			if(subjectsTeamGiveHandcuffsConn) then
+				subjectsTeamGiveHandcuffsConn:Disconnect()
+				subjectsTeamGiveHandcuffsConn = nil
+			end
+		end
+	end)
+	SystemManagerModule.SetGlobalGameState("CuffedPlayers", {})
+	
 	setPlayerCuffedStateRE.OnServerEvent:Connect(function(player: Player, playerToCuff: Player, cuffed: boolean)
 		const playerIsValidFn = t.instanceIsA("Player")
 		const playerToCuffIsValid, playerToCuffInvalidityReason = playerIsValidFn(playerToCuff)
@@ -396,13 +445,16 @@ function CuffSystem.Initialize()
 		
 	
 		const playerCuffingValid = ValidatePlayerCuffing(player, playerToCuff)
-		print("player cuffing valid was ", playerCuffingValid)
+		print(playerCuffingValid)
 		if(not playerCuffingValid) then return end
 		
 		
 		const cuffedIsValid = ValidateCuffed(playerToCuff, cuffed)
-		print("cuffed valid was", cuffedIsValid)
+		print(cuffedIsValid)
 		if(not cuffedIsValid) then return end
+		
+		const globalCuffedPlayers = SystemManagerModule.GetGlobalGameState("CuffedPlayers")
+		if(not globalCuffedPlayers) then return end
 		if(cuffed) then
 			const cufferIsBeingCuffed = IsPlayerInvolvedInCuffing(player)
 			if(cufferIsBeingCuffed) then return end
@@ -412,7 +464,7 @@ function CuffSystem.Initialize()
 			if(not cuffSuccessful) then return end
 			
 			InitializeInvolvedCuffPlayersRemoving(player, playerToCuff)
-			cuffedPlayers[player] = playerToCuff
+			globalCuffedPlayers[player] = playerToCuff
 		else
 			UncuffPlayer(playerToCuff)
 		end

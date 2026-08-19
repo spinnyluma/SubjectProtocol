@@ -1,24 +1,37 @@
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local Players = game:GetService("Players")
 local TweenService = game:GetService("TweenService")
+local Players = game:GetService("Players")
 
-local ReplicaConfig = require(ReplicatedStorage.Modules.Shared.Constants.ReplicaConfig)
-local ModeConfig = require(ReplicatedStorage.Modules.Shared.Constants.ModeConfig)
-
-
-local Replica = require(ReplicatedStorage.Modules.Utilities.ReplicaClient)
+local ClientReplicaConfig = require(ReplicatedStorage.Modules.Shared.Constants.ClientReplicaConfig)
 local AssertHelper = require(ReplicatedStorage.Modules.Helpers.Debug.AssertHelper)
+local ModeConfig = require(ReplicatedStorage.Modules.Shared.Constants.ModeConfig)
+local Replica = require(ReplicatedStorage.Modules.Utilities.ReplicaClient)
 
+local Config = require(script.Config)
+
+const ClientSoundService = require("../../Services/Sound/ClientSoundService")
+const DictionaryHelper = require("../../Helpers/Table/DictionaryHelper")
+const SoundConfig = require("../../Shared/Constants/Sound/SoundConfig")
+const Promise = require("../../Utilities/Promise")
+const t = require("../../Utilities/t")
 
 local facilityModeSelection: ScreenGui? = nil
 local facilityModeContainer: Frame? = nil
 local modeSelectionButtons: Frame? = nil
 local voteTimeFillbar: Frame? = nil
 
+local modeLabel: TextLabel? = nil
+local objectiveLabel: TextLabel? = nil
+
 local selectionButton: ImageButton = ReplicatedStorage.Assets.UI.Templates.SelectionButton
 
 local submitModeVote: RemoteEvent = ReplicatedStorage.Assets.Shared.Remotes.Events.SubmitModeVote
+
 local FacilityModeUiSystem = {}
+
+
+local currentlyPlayedActionMusic: Sound? = nil
+
 
 local function SetFacilityModeSelectionVisibility(isVisible: boolean)
 	local isVisibleIsValid = AssertHelper.InvalidArgAssert(
@@ -57,6 +70,11 @@ local function InitializeUiElements()
 	
 	local voteTime: CanvasGroup = facilityModeContainer:WaitForChild("VoteTime")
 	voteTimeFillbar = voteTime:WaitForChild("Fillbar")
+
+	local objectiveScreen = playerGui:WaitForChild("Objective")
+	local objectiveFrame = objectiveScreen:WaitForChild("ObjectiveFrame")
+	modeLabel = objectiveFrame:WaitForChild("ModeLabel")
+	objectiveLabel = objectiveFrame:WaitForChild("ObjectiveLabel")
 end
 
 local function SetupSelectionButton(selectionButton: ImageButton, mode: ModeConfig.Mode)
@@ -205,9 +223,45 @@ local function TweenModeVoteTimeBar(modeVoteEndTime: number)
 	end)
 end
 
+local function UpdateObjectiveGui(mode: string?)
+	if not mode then return end
+
+	local localPlayer = Players.LocalPlayer
+	local team = localPlayer.Team
+	if not team then return end
+
+	local modeData = ModeConfig.modes[mode]
+	if not modeData then return end
+
+	local teamObjectives = Config.modeObjectives[mode]
+	if not teamObjectives then return end
+
+	local objectiveData = teamObjectives[team]
+	if not objectiveData then return end
+
+	if modeLabel then
+		modeLabel.Text = "FACILITY MODE: " .. modeData.UserFriendlyName
+	end
+	if objectiveLabel then
+		objectiveLabel.Text = "Objective: " .. objectiveData.Objective
+	end
+end
+
+const function PlayRandomActionMusic(): Sound?
+	const randomMusicConfig: SoundConfig.SoundConfig? = DictionaryHelper.GetRandomValueFromDict(SoundConfig.clientSoundConfigs["Action"])
+	const randomMusicConfigIsValid, randomMusicConfigInvalidityReason = t.table(randomMusicConfig)
+	if(not randomMusicConfigIsValid) then
+		AssertHelper.Warn(randomMusicConfigInvalidityReason)
+		return
+	end	
+	
+	const sound = ClientSoundService.PlayLocalSound(randomMusicConfig)
+	return sound
+end
+
 function FacilityModeUiSystem.Initialize()
 	InitializeUiElements()
-	Replica.OnNew(ReplicaConfig.replicaTokens.Mode.Name, function(replica: Replica.Replica)
+	Replica.OnNew(ClientReplicaConfig.replicaTokenNames.Mode.Name, function(replica: Replica.Replica)
 
 		local data = replica.Data
 
@@ -283,6 +337,41 @@ function FacilityModeUiSystem.Initialize()
 		end)
 			
 		
+	end)
+
+	Replica.OnNew(ClientReplicaConfig.replicaTokenNames.CurrentMode.Name, function(replica: Replica.Replica)
+		local data = replica.Data
+		local currentMode = data.CurrentMode
+
+		
+
+		UpdateObjectiveGui(currentMode)
+		if(currentMode ~= ModeConfig.modes.Idle.Name) then
+			currentlyPlayedActionMusic = PlayRandomActionMusic()
+		end
+		replica:OnSet({"CurrentMode"}, function(newMode: any, oldMode: any)
+			currentMode = newMode
+			UpdateObjectiveGui(newMode)
+			if(currentMode ~= ModeConfig.modes.Idle.Name) then
+				currentlyPlayedActionMusic = PlayRandomActionMusic()
+			else
+				if(currentlyPlayedActionMusic) then
+					Promise.try(function()
+						ClientSoundService.FadeOutSound(currentlyPlayedActionMusic, 2)
+						currentlyPlayedActionMusic:Destroy()
+						currentlyPlayedActionMusic = nil
+					end)
+						:catch(function(err)
+							AssertHelper.Warn(tostring(err))
+						end)
+				end
+				
+			end
+		end)
+
+		Players.LocalPlayer:GetPropertyChangedSignal("Team"):Connect(function()
+			UpdateObjectiveGui(currentMode)
+		end)
 	end)
 end
 

@@ -267,7 +267,6 @@ function WeaponPortSystem.Initialize()
 	--InitializeWeaponPortSpawning()
 	FacilityModeSignals.ModeChanged:Connect(function(newMode: ModeConfig.Mode, oldMode: ModeConfig.Mode)
 		if(newMode == ModeConfig.modes.FacilityBombardment.Name) then
-			print("Started bombardment")
 			InitializeWeaponPortSpawning()
 		else
 			modeActive = false

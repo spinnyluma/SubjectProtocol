@@ -17,7 +17,11 @@ local overlapParamsPresets = {
 	},
 	T_SafeZone = {
 		ExcludeInstances = {"Self"}
-	}
+	},
+	T_CellImprisonment = {
+		ExcludeInstances = {"Self"}
+	},
+	
 }
 
 local raycastParamsPresets = {
@@ -308,6 +312,7 @@ SpatialQueryConfig.overlapParams = {
 	T_Keycard = GetKeycardOverlapParams,
 	T_Terminal = GetOverlapParams,
 	T_SafeZone = GetOverlapParams,
+	T_CellImprisonment = GetOverlapParams,
 }
 
 SpatialQueryConfig.raycastParams = {
@@ -322,6 +327,10 @@ SpatialQueryConfig.queryTypes = {
 	Box = {
 		Name = "Box",
 		Value = 1
+	},
+	Part = {
+		Name = "Part",
+		Value = 2
 	}
 }
 

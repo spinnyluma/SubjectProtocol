@@ -100,6 +100,11 @@ local function PerformProximityQuery(origin: BasePart,
 			boxSize,
 			overlapParams
 		)
+	elseif(queryType == SpatialQueryConfig.queryTypes.Part.Name) then
+		parts = workspace:GetPartsInPart(
+			origin,
+			overlapParams
+		)
 	end
 	local targetParents = {}
 	local parentTagName = ProximityConfig.parentTagNames[presetKey]

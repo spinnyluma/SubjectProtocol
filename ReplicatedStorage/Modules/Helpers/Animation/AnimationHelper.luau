@@ -61,7 +61,7 @@ function AnimationHelper.LoadAnimation(animator: Animator, animationId: number |
 		return nil
 	end
 
-	local maxWait: number = timeout or 5
+	local maxWait: number = timeout or math.huge
 
 	local track: AnimationTrack = animator:LoadAnimation(animation)
 

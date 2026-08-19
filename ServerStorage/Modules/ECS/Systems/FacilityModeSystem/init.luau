@@ -6,7 +6,7 @@ local Teams = game:GetService("Teams")
 local TerminalSignals = require(ServerStorage.Modules.ECS.Systems.TerminalControlSystem.Signals)
 
 local TeamConfig = require(ReplicatedStorage.Modules.Shared.Constants.TeamConfig)
-local ReplicaConfig = require(ReplicatedStorage.Modules.Shared.Constants.ReplicaConfig)
+local ClientReplicaConfig = require(ReplicatedStorage.Modules.Shared.Constants.ClientReplicaConfig)
 local ModeConfig = require(ReplicatedStorage.Modules.Shared.Constants.ModeConfig)
 local FacilityModeConfig = require(script.Config)
 
@@ -16,6 +16,7 @@ local FacilityModeSignals = require(script.Signals)
 
 local Trove = require(ReplicatedStorage.Modules.Utilities.Trove)
 local Replica = require(ServerStorage.Modules.Utilities.ReplicaServer)
+local ReplicaConfig = require(ServerStorage.Modules.Constants.ReplicaConfig)
 local Promise = require(ReplicatedStorage.Modules.Utilities.Promise)
 
 local AssertHelper = require(ReplicatedStorage.Modules.Helpers.Debug.AssertHelper)
@@ -38,10 +39,17 @@ local submitModeVoteRE: RemoteEvent = ReplicatedStorage.Assets.Shared.Remotes.Ev
 local subjectsTeam = Teams:FindFirstChild("Subjects")
 
 local modeReplica = Replica.New({
-	Token = Replica.Token(ReplicaConfig.replicaTokens.Mode.Name),
+	Token = Replica.Token(ClientReplicaConfig.replicaTokenNames.Mode.Name),
 	Data = {
 		VoteOngoing = false,
 		Modes = {}
+	}
+})
+
+local currentModeReplica = Replica.New({
+	Token = ReplicaConfig.tokens.CurrentMode.Token,
+	Data = {
+		CurrentMode = currentMode
 	}
 })
 
@@ -240,6 +248,7 @@ local function SetSelectedMode(mode: ModeConfig.Mode)
 		FacilityModeSignals.ModeChanged:Fire(currentMode, oldMode)
 	end
 	SystemManagerModule.SetGlobalGameState("CurrentMode", currentMode)
+	currentModeReplica:Set({"CurrentMode"}, currentMode)
 end
 
 local function InitializeModeVoteProcess()
@@ -347,6 +356,7 @@ function FacilityModeSystem.Initialize()
 	SystemManagerModule.SetGlobalGameState("CurrentMode", currentMode)
 	SystemManagerModule.SetGlobalGameState("ModeVoteCooldown", 0)
 	ReplicateReplicaToSubjects()
+	currentModeReplica:Replicate()
 	submitModeVoteRE.OnServerEvent:Connect(function(player: Player, votedMode: ModeConfig.Mode)
 		if(not voteOngoing) then return end
 		local modeVoteExistsForPlayer: boolean = ModeVoteExistsForPlayer(player)

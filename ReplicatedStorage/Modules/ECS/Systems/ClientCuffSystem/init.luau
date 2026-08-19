@@ -7,12 +7,15 @@ const Utilities = Modules.Utilities
 
 const Promise = require(Utilities.Promise)
 
+const ClientCuffSystemSignals = require("@self/Signals")
 const SystemManagerModule = require("../SystemManagerModule")
+const CuffStateComponent = require("../Components/CuffStateComponent")
 const AssertHelper = require("../../Helpers/Debug/AssertHelper")
+const t = require("../../Utilities/t")
 
 const setupCuffConstraintRE = ReplicatedStorage.Assets.Shared.Remotes.Events.SetupCuffConstraint
 
-const Config = require(script.Config)
+const ClientCuffSystemConfig = require(script.Config)
 
 local ClientCuffSystem = {}
 
@@ -49,22 +52,33 @@ function ClientCuffSystem.Initialize()
 		local targetCharacter = playerToCuff.Character
 		if not targetCharacter then return end
 		
-		local constraintConfig = Config.constraintTypes[constraintType]
+		local constraintConfig = ClientCuffSystemConfig.constraintTypes[constraintType]
 		if not constraintConfig then return end
+		const cuffStateComp: CuffStateComponent.CuffStateComponent? = SystemManagerModule.GetComponentByEntity("CuffState", localPlayer)
+		const localCuffStateCompIsValid, localCuffStateCompInvalidityReason = t.table(cuffStateComp)
+		if not localCuffStateCompIsValid then
+			AssertHelper.Warn(localCuffStateCompInvalidityReason)
+			return
+		end
 		
+		const cuffState = cuffStateComp.CuffState
+		if not cuffState then return end
 		Promise.try(function()
 			local localHRP = localCharacter:WaitForChild("HumanoidRootPart")
 			local targetHRP = targetCharacter:WaitForChild("HumanoidRootPart")
 			local cuffAttachment = localHRP:WaitForChild("CuffAttachment")
 			local targetRootAttachment = targetHRP:WaitForChild("RootAttachment")
 			
-			if constraintType == Config.constraintTypes.AlignPosition.Name then
+			if constraintType == ClientCuffSystemConfig.constraintTypes.AlignPosition.Name then
 				SpawnAlignPosition(cuffAttachment, targetRootAttachment, localHRP)
-			elseif constraintType == Config.constraintTypes.AlignOrientation.Name then
+			elseif constraintType == ClientCuffSystemConfig.constraintTypes.AlignOrientation.Name then
 				SpawnAlignOrientation(cuffAttachment, targetRootAttachment, localHRP)
 			end
-			
-			
+			const oldCuffState = cuffStateComp.CuffState
+			cuffStateComp.CuffState = ClientCuffSystemConfig.cuffStates.Cuffing.Name
+			if(oldCuffState ~= cuffStateComp.CuffState) then
+				ClientCuffSystemSignals.CuffStateChanged:Fire(cuffStateComp.CuffState, oldCuffState)
+			end
 		end)
 			
 			:catch(function(err)

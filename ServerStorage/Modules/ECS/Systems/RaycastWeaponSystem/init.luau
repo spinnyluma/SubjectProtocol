@@ -1,27 +1,28 @@
-local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local Players = game:GetService("Players")
 local CollectionService = game:GetService("CollectionService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local ServerStorage = game:GetService("ServerStorage")
+local Players = game:GetService("Players")
 local Teams = game:GetService("Teams")
 
+local HostilitySystemSignals = require(ServerStorage.Modules.ECS.Systems.HostilitySystem.Signals)
+local CombatServiceSignals = require(ReplicatedStorage.Modules.Services.Combat.CombatService.Signals)
+local CombatServiceConfig = require(ReplicatedStorage.Modules.Services.Combat.CombatService.Config)
+local SpatialQueryConfig = require(ReplicatedStorage.Modules.Shared.Constants.SpatialQueryConfig)
+local SpatialQueryHelper  = require(ReplicatedStorage.Modules.Helpers.SpatialQuery.SpatialQueryHelper)
+local WeaponDataConfig = require(ReplicatedStorage.Modules.Shared.Constants.WeaponDataConfig)
+local CharacterConfig = require(ReplicatedStorage.Modules.Shared.Constants.CharacterConfig)
+local CharacterHelper = require(ReplicatedStorage.Modules.Helpers.Character.CharacterHelper)
+local DataModelHelper = require(ReplicatedStorage.Modules.Helpers.DataModel.DataModelHelper)
+local CombatService = require(ReplicatedStorage.Modules.Services.Combat.CombatService)
+local AssertHelper = require(ReplicatedStorage.Modules.Helpers.Debug.AssertHelper)
+local CombatHelper = require(ServerStorage.Modules.Helpers.Combat.CombatHelper)
+local TableHelper = require(ReplicatedStorage.Modules.Helpers.Table.TableHelper)
 
 local RaycastWeaponConfig = require(script.Config)
-local WeaponDataConfig = require(ReplicatedStorage.Modules.Shared.Constants.WeaponDataConfig)
-local SpatialQueryConfig = require(ReplicatedStorage.Modules.Shared.Constants.SpatialQueryConfig)
-local CharacterConfig = require(ReplicatedStorage.Modules.Shared.Constants.CharacterConfig)
-local CombatServiceConfig = require(ReplicatedStorage.Modules.Services.Combat.CombatService.Config)
-local HostilitySystemSignals = require(ServerStorage.Modules.ECS.Systems.HostilitySystem.Signals)
 
-local AssertHelper = require(ReplicatedStorage.Modules.Helpers.Debug.AssertHelper)
-local CharacterHelper = require(ReplicatedStorage.Modules.Helpers.Character.CharacterHelper)
-local SpatialQueryHelper  = require(ReplicatedStorage.Modules.Helpers.SpatialQuery.SpatialQueryHelper)
-local TableHelper = require(ReplicatedStorage.Modules.Helpers.Table.TableHelper)
-local DataModelHelper = require(ReplicatedStorage.Modules.Helpers.DataModel.DataModelHelper)
-local CombatHelper = require(ServerStorage.Modules.Helpers.Combat.CombatHelper)
-
-local CombatService = require(ReplicatedStorage.Modules.Services.Combat.CombatService)
-
-local CombatServiceSignals = require(ReplicatedStorage.Modules.Services.Combat.CombatService.Signals)
+const SoundReplicationService = require("../../Services/Sound/SoundReplicationService")
+const SoundReplicationSystemConfig = require("./SoundReplicationSystem/Config")
+const ClientSoundConfig = require(ReplicatedStorage.Modules.Shared.Constants.Sound.SoundConfig)
 
 local subjectsTeam = Teams.Subjects
 
@@ -252,13 +253,16 @@ function RaycastWeaponSystem.Initialize()
 
 			local otherPlayers = DataModelHelper.InvertSelection({player})
 			if(not otherPlayers) then return end
+			
+			const weaponPivot = weapon:GetPivot()
+			if(not weaponPivot) then return end
 
-
+				
 			local playerTeam = player.Team 
 			CombatService.ReplicateRay(firePoint, endPosition, otherPlayers, {
 				Team = playerTeam
 			})
-			
+			SoundReplicationService.ReplicateSound(otherPlayers, ClientSoundConfig.clientSoundConfigs.Gun.PistolGunshot)
 			local instanceBelongsToCharacter = CharacterHelper.IsPartInCharacterModel(instanceHit)
 			local instanceBelongsToDamageableObject = CombatService.IsInstancePartOfDamageableObject(instanceHit)
 			

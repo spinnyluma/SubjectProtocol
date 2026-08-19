@@ -267,23 +267,24 @@ local function InitializeLoadedAnimatorAnimsHandlers()
 	const localPlayer = Players.LocalPlayer
 	const character = localPlayer.Character
 	
-	character.ChildRemoved:Connect(function(child: Instance)
-		Promise.try(function()
-			const humanoid = character:WaitForChild("Humanoid")
-			const animator = humanoid:WaitForChild("Animator")
-			local loadedAnimatorAnimsComp = SystemManagerModule.GetComponentByEntity("LoadedAnimatorAnims", animator)
-			if(loadedAnimatorAnimsComp) then
-				local loadedAnimTracks = loadedAnimatorAnimsComp.LoadedAnimationTracks
+	if(character) then
+		character.ChildRemoved:Connect(function(child: Instance)
+			Promise.try(function()
+				const humanoid = character:WaitForChild("Humanoid")
+				const animator = humanoid:WaitForChild("Animator")
+				local loadedAnimatorAnimsComp = SystemManagerModule.GetComponentByEntity("LoadedAnimatorAnims", animator)
+				if(loadedAnimatorAnimsComp) then
+					local loadedAnimTracks = loadedAnimatorAnimsComp.LoadedAnimationTracks
 
-				for id, loadedTrack in loadedAnimTracks do
-					loadedTrack:Stop()
+					for id, loadedTrack in loadedAnimTracks do
+						loadedTrack:Stop()
+					end
+
 				end
-
-			end
+			end)
 		end)
-		
-		
-	end)
+	end
+	
 	
 	localPlayer.CharacterRemoving:Connect(function(character: Model)
 		Promise.try(function()

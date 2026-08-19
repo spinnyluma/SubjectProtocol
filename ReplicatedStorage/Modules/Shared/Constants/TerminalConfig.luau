@@ -100,5 +100,5 @@ TerminalConfig.terminalOwnerCaptureTimeStates = {
 
 
 TerminalConfig.TIME_TO_CAPTURE = 2
-TerminalConfig.TIME_TO_OWN_TERMINAL = 10
+TerminalConfig.TIME_TO_OWN_TERMINAL = 60
 return TerminalConfig

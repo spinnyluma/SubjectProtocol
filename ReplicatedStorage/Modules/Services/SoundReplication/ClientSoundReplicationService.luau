@@ -4,6 +4,9 @@ const ReplicatedStorage = game:GetService("ReplicatedStorage")
 const AssertHelper = require(ReplicatedStorage.Modules.Helpers.Debug.AssertHelper)
 const SoundConfig = require(ReplicatedStorage.Modules.Shared.Constants.Sound.SoundConfig)
 
+const DictionaryHelper = require("../../Helpers/Table/DictionaryHelper")
+const t = require("../../Utilities/t")
+
 local ClientSoundReplicationService = {}
 
 local function SetUpSoundFromSoundConfig(soundConfig: SoundConfig.SoundConfig)
@@ -21,16 +24,50 @@ local function SetUpSoundFromSoundConfig(soundConfig: SoundConfig.SoundConfig)
 	local soundProperties = ReflectionService:GetPropertiesOfClass("Sound", {
 		ExcludeInherited = true
 	})
+	if(soundConfig.Children) then
+		const soundChildren = soundConfig.Children
+		for className, propertyValues in soundChildren do
+			const reflectedClass = ReflectionService:GetClass(className)
+			
 
+			if not reflectedClass then 
+				AssertHelper.Warn(`Class name ${className} is invalid`)
+				continue
+			end
+
+			const permits = reflectedClass.Permits
+			if not permits then 
+				continue 
+			end
+			const permitsNew = permits.New
+			if(not permitsNew) then
+				AssertHelper.Warn(`Class name ${className} does not have a new constructor`)
+				continue
+			end
+			const newInstance = Instance.new(className)
+			for name, value in propertyValues do
+				
+				if(newInstance[name] ~= nil) then
+					newInstance[name] = value
+				end
+				
+			end
+			newInstance.Parent = sound
+		end
+		
+	end
 	for _, propertyTable in soundProperties do
+		
 		const propertyName = propertyTable.Name
 		const propertyValue = soundConfig[propertyName]
 		if(not soundConfig[propertyName]) then continue end
 		if(propertyName == "SoundId") then
 			sound.SoundId = "rbxassetid://"..propertyValue
-		else
+		elseif(sound[propertyName] ~= nil) then
 			sound[propertyName] = propertyValue
 
+		elseif(propertyName == "Children") then
+			
 		end
 	end
 	return sound
@@ -66,7 +103,7 @@ function ClientSoundReplicationService.PlaySoundFromPart(part: BasePart, soundCo
 	end)
 end
 
-function ClientSoundReplicationService.PlaySoundFromPosition(position: Vector3, soundConfig: SoundConfig.SoundConfig)
+function ClientSoundReplicationService.PlaySoundFromPosition(position: Vector3, soundConfig: SoundConfig.SoundConfig): Attachment?
 	const positionIsValid = AssertHelper.InvalidArgAssert(
 		typeof(position) == "Vector3",
 		position,
@@ -95,6 +132,7 @@ function ClientSoundReplicationService.PlaySoundFromPosition(position: Vector3, 
 	end
 
 	sound.Parent = attachment
+	attachment.Name = "SoundAttachment"
 	attachment.Parent = workspace
 	sound:Play()
 
@@ -102,6 +140,7 @@ function ClientSoundReplicationService.PlaySoundFromPosition(position: Vector3, 
 		sound:Destroy()
 		attachment:Destroy()
 	end)
+	return attachment
 end
 
 return ClientSoundReplicationService

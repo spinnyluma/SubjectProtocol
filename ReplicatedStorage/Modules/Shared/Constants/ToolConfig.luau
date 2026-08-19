@@ -4,6 +4,7 @@ local ServerStorage = game:GetService("ServerStorage")
 const AnimationHelper = require("../../Helpers/Animation/AnimationHelper")
 const AssertHelper = require("../../Helpers/Debug/AssertHelper")
 const AssetConfig = require("./AssetConfig")
+const Promise = require("../../Utilities/Promise")
 
 local rigTemplate = ReplicatedStorage.Assets.Character.Templates.Rig
 local animator = rigTemplate:QueryDescendants("Animator")[1]
@@ -66,36 +67,42 @@ ToolConfig.toolCombatConfigs = {
 
 local function InitializeAnimationLengths()
 	for _, config in ToolConfig.toolAnimationConfigs do
-		local attackAnimation = AnimationHelper.LoadAnimation(animator,
-			AssetConfig.assetIdPrefix 
-				.. config.AttackAnimationId)
-		local attackAnimationIsValid = AssertHelper.ExpectedValAssert(
-			typeof(attackAnimation) == "Instance"
-				and attackAnimation:IsA("AnimationTrack"),
-			"AttackAnimation",
-			"InitializeAnimationLengths",
-			"AnimationTrack"
-		)
-		if(not attackAnimationIsValid) then return end
+		Promise.try(function()
+			local attackAnimation = AnimationHelper.LoadAnimation(animator,
+				AssetConfig.assetIdPrefix 
+					.. config.AttackAnimationId)
+			local attackAnimationIsValid = AssertHelper.ExpectedValAssert(
+				typeof(attackAnimation) == "Instance"
+					and attackAnimation:IsA("AnimationTrack"),
+				"AttackAnimation",
+				"InitializeAnimationLengths",
+				"AnimationTrack"
+			)
+			if(not attackAnimationIsValid) then return end
+
+			local equipAnimation = AnimationHelper.LoadAnimation(animator,
+				AssetConfig.assetIdPrefix 
+					.. config.EquipAnimationId)
+			local equipAnimationIsValid = AssertHelper.ExpectedValAssert(
+				typeof(equipAnimation) == "Instance"
+					and equipAnimation:IsA("AnimationTrack"),
+				"EquipAnimation",
+				"InitializeAnimationLengths",
+				"AnimationTrack"
+			)
+			if(not equipAnimationIsValid) then return end
+
+			if(attackAnimation) then
+				config.AttackAnimationLength = attackAnimation.Length
+			end
+			if(equipAnimation) then
+				config.EquipAnimationLength = equipAnimation.Length
+			end
+		end)
+			:catch(function(err)
+				AssertHelper.Warn(tostring(err))
+			end)
 		
-		local equipAnimation = AnimationHelper.LoadAnimation(animator,
-			AssetConfig.assetIdPrefix 
-				.. config.EquipAnimationId)
-		local equipAnimationIsValid = AssertHelper.ExpectedValAssert(
-			typeof(equipAnimation) == "Instance"
-				and equipAnimation:IsA("AnimationTrack"),
-			"EquipAnimation",
-			"InitializeAnimationLengths",
-			"AnimationTrack"
-		)
-		if(not equipAnimationIsValid) then return end
-		
-		if(attackAnimation) then
-			config.AttackAnimationLength = attackAnimation.Length
-		end
-		if(equipAnimation) then
-			config.EquipAnimationLength = equipAnimation.Length
-		end
 	end
 end
 

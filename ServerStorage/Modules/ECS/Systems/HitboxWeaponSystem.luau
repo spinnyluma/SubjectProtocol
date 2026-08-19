@@ -19,6 +19,8 @@ const CombatService = require(Combat.CombatService)
 const ToolConfig = require(Constants.ToolConfig)
 const ToolHelper = require(Tool.ToolHelper)
 
+const HostilitySystemSignals = require("./HostilitySystem/Signals")
+
 const Character = Helpers.Character
 
 const Debug = Helpers.Debug
@@ -164,6 +166,7 @@ function HitboxWeaponSystem.Initialize()
 		if(not toolCombatConfig) then return end
 		local damage = toolCombatConfig.DamageValue
 		if(not damage) then return end
+		HostilitySystemSignals.HostilityRequested:Fire(player)
 		if(isDamageable) then
 			
 			CombatService.DamageDamageableObject(damageableObjectHit, damage)

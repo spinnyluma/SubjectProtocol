@@ -37,6 +37,7 @@ const function RemoveCuffPrompt(player: Player)
 			AssertHelper.Warn(tostring(errorMsg))
 		end)
 end
+
 local function RemovePromptsForHandcuffs(handcuffs: Tool)
 	const handcuffsIsValid = t.instanceIsA("Tool")
 	if not handcuffsIsValid then 

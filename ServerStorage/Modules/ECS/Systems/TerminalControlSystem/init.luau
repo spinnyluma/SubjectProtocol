@@ -12,7 +12,7 @@ local ProximityConfig = require(ServerStorage.Modules.ECS.Systems.ProximityInter
 local TeamConfig = require(ReplicatedStorage.Modules.Shared.Constants.TeamConfig)
 local AssertHelper = require(ReplicatedStorage.Modules.Helpers.Debug.AssertHelper)
 local TerminalConfig = require(ReplicatedStorage.Modules.Shared.Constants.TerminalConfig)
-local ReplicaConfig = require(ReplicatedStorage.Modules.Shared.Constants.ReplicaConfig)
+local ClientReplicaConfig = require(ReplicatedStorage.Modules.Shared.Constants.ClientReplicaConfig)
 local FacilityModeConfig = require(ServerStorage.Modules.ECS.Systems.FacilityModeSystem.Config)
 
 local SystemManagerModule = require(ReplicatedStorage.Modules.ECS.SystemManagerModule)
@@ -40,7 +40,7 @@ local cooldownDecrementConnection: RBXScriptConnection? = nil
 local terminalOwnerTimePromise = nil
 
 local terminalReplica = Replica.New({
-	Token = Replica.Token(ReplicaConfig.replicaTokens.Terminal.Name),
+	Token = Replica.Token(ClientReplicaConfig.replicaTokenNames.Terminal.Name),
 	Data = {
 		TerminalCaptureTime = currentTerminalContestTime,
 		TerminalOwnerCaptureTime = currentTerminalOwnerCaptureTime,

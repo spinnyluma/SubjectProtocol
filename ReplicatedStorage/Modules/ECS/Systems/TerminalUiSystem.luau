@@ -6,7 +6,7 @@ local AssertHelper = require(ReplicatedStorage.Modules.Helpers.Debug.AssertHelpe
 local Replica = require(ReplicatedStorage.Modules.Utilities.ReplicaClient)
 local Trove = require(ReplicatedStorage.Modules.Utilities.Trove)
 -- TROVE!!! means i need to store tween of capture time text and check if it is playing so i need to cancel it when setting capture time text visibility
-local ReplicaConfig = require(ReplicatedStorage.Modules.Shared.Constants.ReplicaConfig)
+local ClientReplicaConfig = require(ReplicatedStorage.Modules.Shared.Constants.ClientReplicaConfig)
 local TerminalConfig = require(ReplicatedStorage.Modules.Shared.Constants.TerminalConfig)
 local TeamConfig = require(ReplicatedStorage.Modules.Shared.Constants.TeamConfig)
 
@@ -328,7 +328,7 @@ end
 function TerminalUiSystem.Initialize()
 	InitializeUiElements()
 	
-	Replica.OnNew(ReplicaConfig.replicaTokens.Terminal.Name, function(replica)
+	Replica.OnNew(ClientReplicaConfig.replicaTokenNames.Terminal.Name, function(replica)
 		local data = replica.Data
 		local terminalCaptureTime = data["TerminalCaptureTime"]
 		local terminalCaptureTimeIsValid = AssertHelper.ExpectedValAssert(

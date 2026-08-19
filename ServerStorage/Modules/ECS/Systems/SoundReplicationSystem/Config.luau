@@ -10,7 +10,9 @@ Config.sounds = {
 		Name = "ExplosionSound1",
 		SoundId = "138680390593747",
 		Value = 1
-	}
+	},
+	
+	
 }
 
 return Config

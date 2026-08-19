@@ -15,14 +15,18 @@ const ToolConfig = require(Constants.ToolConfig)
 const Promise = require(Utilities.Promise)
 const t = require(Utilities.t)
 
+const ClientCuffSystemConfig = require("../ClientCuffSystem/Config")
 const PromptHandlerComponent = require("../../Components/PromptHandlerComponent")
 const ToolPromptSystemConfig = require("./Config")
 const SystemManagerModule = require("../../SystemManagerModule")
+const CuffStateComponent = require("../../Components/CuffStateComponent")
+const ClientCuffService = require("../../../Services/Cuff/ClientCuffService")
 const CharacterConfig = require("../../../Shared/Constants/CharacterConfig")
 const CharacterHelper = require("../../../Helpers/Character/CharacterHelper")
 const DataModelHelper = require("../../../Helpers/DataModel/DataModelHelper")
 const AssertHelper = require("../../../Helpers/Debug/AssertHelper")
 const CuffHelper = require("../../../Helpers/Cuff/CuffHelper")
+const ClientCuffSystemSignals = require("../ClientCuffSystem/Signals")
 const Trove = require("../../../Utilities/Trove")
 
 local PromptAddHandlers = {}
@@ -31,34 +35,6 @@ const guardsTeam = Teams.Guards
 const subjectsTeam = Teams.Subjects
 
 const setPlayerCuffedStateRE = ReplicatedStorage.Assets.Shared.Remotes.Events.SetPlayerCuffedState
-
-const function RemoveCuffConstraints(localPlayer: Player)
-	const playerIsValidFn = t.instanceIsA("Player")
-
-	local playerIsValid, playerInvalidityReason = playerIsValidFn(localPlayer)
-	if not playerIsValid then 
-		AssertHelper.Warn(playerInvalidityReason)
-		return false
-	end
-
-	local character = localPlayer.Character
-	if not character then return false end
-
-	Promise.try(function()
-		local humanoidRootPart = character:WaitForChild("HumanoidRootPart")
-		if not humanoidRootPart then return false end
-
-		local cuffAlignPosition = humanoidRootPart:FindFirstChild("CuffAlignPosition")
-		if not cuffAlignPosition then return false end
-
-		local cuffAlignOrientation = humanoidRootPart:FindFirstChild("CuffAlignOrientation")
-		if(not cuffAlignOrientation) then return false end
-
-		cuffAlignPosition:Destroy()
-		cuffAlignOrientation:Destroy()
-	end)
-
-end
 
 const function AddCuffPrompt(player: Player, handcuffs: Tool)
 	const playerIsValidFn = t.instanceIsA("Player")
@@ -170,12 +146,25 @@ const function AddPromptsForHandcuffs(handcuffs: Tool)
 		promptHandlerComponent = SystemManagerModule.AddComponent("PromptHandler", handcuffs)
 	end
 	
+	const localPlayer = Players.LocalPlayer
+	if(not localPlayer) then return end
+	local cuffStateComponent: CuffStateComponent.CuffStateComponent? = SystemManagerModule.GetComponentByEntity("CuffState", localPlayer)
+	if(not cuffStateComponent) then
+		cuffStateComponent = SystemManagerModule.AddComponent("CuffState", localPlayer)
+	end
+	
+	
 	const promptHandlerComponentIsValid,
 		promptHandlerCompInvalidityReason = t.table(promptHandlerComponent)
 	if(not promptHandlerComponentIsValid) then
 		AssertHelper.Warn(promptHandlerComponentIsValid)
 		return
 	end
+	
+	const cuffStateCompIsValid, cuffStateCompInvalidityReason = t.table(cuffStateComponent)
+	if(not cuffStateCompIsValid) then
+		AssertHelper.Warn(cuffStateCompInvalidityReason)
+		return end
 	
 	const promptHandlersTroves = promptHandlerComponent.handlersTrove
 	const promptHandlersTrovesIsValid, 
@@ -200,6 +189,7 @@ const function AddPromptsForHandcuffs(handcuffs: Tool)
 	
 	const localPlayer = Players.LocalPlayer
 	const addPromptPlayers: {Player?}? = GetPlayersForPromptAdd(localPlayer)
+
 	if(not addPromptPlayers) then return end
 	
 	const teamForPromptAdd: Team? = GetTeamForPromptAdd(localPlayer)
@@ -246,9 +236,9 @@ const function AddPromptsForHandcuffs(handcuffs: Tool)
 				onDeathCleanupHandlersTroves[player] = Trove.new()
 			end
 			const targetHumanoidDiedConn = targetHumanoid.Died:Once(function()
-				RemoveCuffConstraints(localPlayer)
-				print(SystemManagerModule.world["Components"]["PromptHandler"])
-				print("tried to clena up on death")
+				ClientCuffService.RemoveCuffConstraints(localPlayer)
+								
+				ClientCuffService.SetCuffState(ClientCuffSystemConfig.cuffStates.Idle.Name)
 				const targetPlayerTrove = onDeathCleanupHandlersTroves[player]
 				const targetPlayerTroveIsValid, targetPlayerTroveInvalidityReason = t.table(targetPlayerTrove)
 				if(not targetPlayerTroveIsValid) then
@@ -288,7 +278,9 @@ const function AddPromptsForHandcuffs(handcuffs: Tool)
 					onDeathCleanupHandlersTroves[player] = Trove.new()
 				end
 				const targetHumanoidDiedConn = targetCharacterHumanoid.Died:Once(function()
-					RemoveCuffConstraints(localPlayer)
+					ClientCuffService.RemoveCuffConstraints(localPlayer)
+					
+					ClientCuffService.SetCuffState(ClientCuffSystemConfig.cuffStates.Idle.Name)
 					const targetPlayerTrove = onDeathCleanupHandlersTroves[player]
 					const targetPlayerTroveIsValid, targetPlayerTroveInvalidityReason = t.table(targetPlayerTrove)
 					if(not targetPlayerTroveIsValid) then
@@ -325,10 +317,18 @@ const function AddPromptsForHandcuffs(handcuffs: Tool)
 			const localPlayerIsCuffing: boolean = CuffHelper.LocalPlayerIsCuffing(localPlayer)
 			const localPlayerIsCuffingTargetCharacter: boolean = CuffHelper.LocalPlayerIsCuffingPlayerByAttachments(localPlayer, player)
 			if(localPlayerIsCuffing and localPlayerIsCuffingTargetCharacter) then
-				RemoveCuffConstraints(localPlayer)
+				ClientCuffService.RemoveCuffConstraints(localPlayer)
+				-- Remove transparent arrow attachments
+				for _, descendant in localPlayer.Character:GetDescendants() do
+					if descendant.Name == "TransparentImprisonmentBeam" then
+						descendant:Destroy()
+					end
+				end
+				ClientCuffService.SetCuffState(ClientCuffSystemConfig.cuffStates.Idle.Name)
 				prompt.ActionText = "Cuff Player"
 				setPlayerCuffedStateRE:FireServer(player, false)
 			elseif(not localPlayerIsCuffing and not localPlayerIsCuffingTargetCharacter) then
+				
 				prompt.ActionText = "Release Player"
 				setPlayerCuffedStateRE:FireServer(player, true)
 
@@ -345,12 +345,14 @@ const function AddPromptsForHandcuffs(handcuffs: Tool)
 		if(not localCharacter) then return end
 		const localHumanoid = localCharacter:WaitForChild("Humanoid")
 		localHumanoid.Died:Once(function()
-			RemoveCuffConstraints(localPlayer)
+			ClientCuffService.RemoveCuffConstraints(localPlayer)
+			ClientCuffService.SetCuffState(ClientCuffSystemConfig.cuffStates.Idle.Name)
 		end)		
 	end)
 		:catch(function(err: any)
 			AssertHelper.Warn(tostring(err))
 		end)
+	
 	
 	const playerRemovingConn = Players.PlayerRemoving:Connect(function(player: Player)
 		const promptHandlerComp: PromptHandlerComponent.PromptHandlerComponent = SystemManagerModule.GetComponentByEntity("PromptHandler", handcuffs)

@@ -33,7 +33,6 @@ local function InitializePromptTool(toolPromptInstance: Tool)
 		AssertHelper.Warn(promptAddHandlerInvalidityReason)
 		return 
 	end	
-	
 	promptAddHandler(toolPromptInstance)
 end
 
@@ -69,6 +68,7 @@ local function InitializePromptTools()
 			
 			const humanoidState = humanoid:GetState()
 			if(humanoid == Enum.HumanoidStateType.Dead) then return end			
+			
 			InitializePromptTool(localToolEquipped)
 		end)
 			:catch(function(errorMsg: any)
@@ -101,6 +101,7 @@ const function CleanUpBackpackToolsHandlers(player: Player)
 		if(tool:IsA("Tool")) then
 			InitializeRemovePromptTool(tool)
 			SystemManagerModule.RemoveComponent("PromptHandler", tool)
+			SystemManagerModule.RemoveComponent("CuffState", player)
 		end
 	end
 end
@@ -120,6 +121,7 @@ const function CleanUpCharacterToolsHandlers(player: Player)
 		if(tool:IsA("Tool")) then
 			InitializeRemovePromptTool(tool)
 			SystemManagerModule.RemoveComponent("PromptHandler", tool)
+			SystemManagerModule.RemoveComponent("CuffState", player)
 		end
 	end
 end

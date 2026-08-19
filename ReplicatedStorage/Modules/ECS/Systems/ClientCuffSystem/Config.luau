@@ -11,4 +11,16 @@ Config.constraintTypes = {
 	}
 }
 
+Config.cuffStates = {
+	["Cuffing"] = {
+		Name = "Cuffing",
+		Value = 0
+	},
+	["Idle"] = {
+		Name = "Idle",
+		Value = 1
+		
+	}
+}
+
 return Config
