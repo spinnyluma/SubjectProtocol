@@ -1,9 +1,13 @@
-local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Players = game:GetService("Players")
 local Teams = game:GetService("Teams")
 
-
 local AssertHelper = require(ReplicatedStorage.Modules.Helpers.Debug.AssertHelper)
+
+const CameraService = require("../../Services/Camera/CameraService")
+const InputSystem = require("./InputSystem")
+const Promise = require("../../Utilities/Promise")
+const Icon = require("../../Utilities/TopbarPlus/Icon")
 
 local teamSelection: ScreenGui? = nil
 local guardsButton: ImageButton? = nil
@@ -69,6 +73,33 @@ local function InitializeUiElements()
 	subjectsButton = teamSelectionList:WaitForChild("SubjectsButton")
 end
 
+const function SetCameraToTeamSelectionCamera()
+	Promise.try(function()
+		const camCframePart: BasePart = workspace:WaitForChild("TeamSelectionCamCframePart")
+		CameraService.SetCameraCframe(workspace.CurrentCamera, camCframePart.CFrame)
+	end)
+		:catch(function(err)
+			AssertHelper.Warn(tostring(err))
+		end)
+end
+
+const function ResetCameraToLocalHumanoid()
+	const localPlayer = Players.LocalPlayer
+	const character = localPlayer.Character
+	
+	Promise.try(function()
+		if(character) then
+			const humanoid = character:WaitForChild("Humanoid")
+			CameraService.SetCameraSubject(workspace.CurrentCamera, humanoid)
+				
+		end
+	end)
+		:catch(function(err)
+			AssertHelper.Warn(tostring(err))
+		end)
+	
+end
+
 local function InitializeTeamSelectionUi()
 	local localPlayer = Players.LocalPlayer
 	local localPlayerIsValid = AssertHelper.ExpectedValAssert(
@@ -101,16 +132,38 @@ local function InitializeTeamSelectionUi()
 	
 	if(playerTeam == TeamConfig.teams.Choosing.Team) then
 		teamSelection.Enabled = true
+		SetCameraToTeamSelectionCamera()		
 	else
 		teamSelection.Enabled = false
+		ResetCameraToLocalHumanoid()
 	end
 	
+	
+	SetCameraToTeamSelectionCamera()
 	localPlayer:GetPropertyChangedSignal("Team"):Connect(function()
 		if(localPlayer.Team == TeamConfig.teams.Choosing.Team) then
+			SetCameraToTeamSelectionCamera()
 			teamSelection.Enabled = true
 		else
 			teamSelection.Enabled = false
+			ResetCameraToLocalHumanoid()
 		end
+	end)
+end
+
+const function InitializeTeamSelectionTopbar()
+	const icon: Icon.Icon = Icon.new()
+	
+	const teamSelectionIconImageId = "135651764192293"
+	icon:setImage(teamSelectionIconImageId)
+	icon:setLabel("Change Team")
+	icon:setOrder(1.01)
+	icon:modifyTheme({
+		{"IconImage", "ImageColor3", Color3.fromRGB(255,255,255), "Deselected"}
+	})
+	icon:oneClick(true)
+	icon.selected:Connect(function()
+		selectTeamRE:FireServer(TeamConfig.teams.Choosing.Team)
 	end)
 end
 
@@ -118,6 +171,8 @@ function TeamSelectionUiSystem.Initialize()
 	InitializeUiElements()
 	InitializeTeamSelectionButtons()
 	InitializeTeamSelectionUi()
+	InitializeTeamSelectionButtons()
+	InitializeTeamSelectionTopbar()	
 end
 
 return TeamSelectionUiSystem

@@ -1,5 +1,7 @@
 const Teams = game:GetService("Teams")
 
+const SoundConfig = require("./Sound/SoundConfig")
+
 local ModeConfig = {}
 
 export type Mode = keyof<typeof(ModeConfig.modes)>
@@ -46,8 +48,31 @@ ModeConfig.modeDescriptions = {
 	}
 }
 
+ModeConfig.modeAnnouncementSoundConfigs = {
+	[ModeConfig.modes.Idle.Name] = {
+		Name = "Idle",
+		SoundConfig = SoundConfig.clientSoundConfigs.Announcement.SystemFacilityRestored,
+		Value = 0
+	},
+	[ModeConfig.modes.TurretOverride.Name] = {
+		Name = "TurretOverride",
+		SoundConfig = SoundConfig.clientSoundConfigs.Announcement.TurretOverrideAnnouncementVoice,
+		Value = 1
+	},
+	[ModeConfig.modes.FacilityBombardment.Name] = {
+		Name = "FacilityBombardment",
+		SoundConfig = SoundConfig.clientSoundConfigs.Announcement.FacilityBombardmentAnnouncement,
+		Value = 2
+	},
+	[ModeConfig.modes.RoleReversal.Name] = {
+		Name = "RoleReversal",
+		SoundConfig = SoundConfig.clientSoundConfigs.Announcement.RoleReversalAnnouncement,
+		Value = 3
+	}
+}
+
 ModeConfig.NUMBER_OF_MODES = 3
 ModeConfig.MODE_VOTE_TIME = 10
 
-ModeConfig.MODE_DURATION = 120
+ModeConfig.MODE_DURATION = 10
 return ModeConfig

@@ -2,11 +2,26 @@ local CollectionService = game:GetService("CollectionService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local ServerStorage = game:GetService("ServerStorage")
 local Players = game:GetService("Players")
+const Teams = game:GetService("Teams")
 
+const Modules = ReplicatedStorage.Modules
+
+const Utilities = Modules.Utilities
+const Shared = Modules.Shared
+
+const Constants = Shared.Constants
+
+const Sound = Constants.Sound
 
 local TurretConfig = require(ReplicatedStorage.Modules.Shared.Constants.TurretConfig)
-local TurretSystemConfig = require(script.Config)
+const SoundConfig = require(Sound.SoundConfig)
 local ModeConfig = require(ReplicatedStorage.Modules.Shared.Constants.ModeConfig)
+const t = require(Utilities.t)
+
+local TurretSystemConfig = require(script.Config)
+
+const SoundReplicationService = require("../../Services/Sound/SoundReplicationService")
+
 local SpatialQueryConfig = require(ReplicatedStorage
 	.Modules
 	.Shared
@@ -46,7 +61,7 @@ local replicateTurretRotationRE = ReplicatedStorage
 	.Events
 	.ReplicateTurretRotation
 
-local TURRET_RAY_LENGTH = 300
+local TURRET_RAY_LENGTH = 50
 local TURRET_SPREAD_RADIUS = 4
 
 local currentTeamsTargeted: {Team?} = {}
@@ -116,6 +131,21 @@ local function CanTargetPlayer(player: Player): boolean?
 	return playerInTargetedTeam ~= nil
 end
 
+const function PlayTurretFireSound(firePointPosition: Vector3)
+	const firePointPositionIsValid, firePointPositionInvalidityReason = t.Vector3(firePointPosition)
+	if(not firePointPositionIsValid) then 
+		AssertHelper.Warn(firePointPositionInvalidityReason)
+		return 
+	end
+	const emittingSoundConfig = SoundConfig.clientSoundConfigs.Gun.TurretShot
+	if(emittingSoundConfig) then
+		const cloneConfig = table.clone(emittingSoundConfig)
+		cloneConfig.EmittingPosition = firePointPosition
+		SoundReplicationService.ReplicateSound(Players:GetPlayers(), cloneConfig)
+
+	end
+end
+
 local function ShootTurret(turret: Model)
 	local turretIsValid = AssertHelper.InvalidArgAssert(
 		typeof(turret) == "Instance"
@@ -171,6 +201,7 @@ local function ShootTurret(turret: Model)
 		local params: OverlapParams? = paramsFn(TurretConfig.TURRET_TAG_NAME, {
 			["Self"] = turret
 		})
+		
 		local paramsIsValid = AssertHelper.ExpectedValAssert(
 			typeof(params) == "RaycastParams",
 			params,
@@ -185,12 +216,15 @@ local function ShootTurret(turret: Model)
 			TURRET_RAY_LENGTH,
 			params
 		)
-		print("player is in view of part ", playerIsInViewOfPart)
-		if(not playerIsInViewOfPart) then continue end
+		
+		
+		if(not playerIsInViewOfPart) then
+			continue end
 		local players = Players:GetPlayers()
 		
 		local fireRayResult: RaycastResult? | Vector3? = FireTurretRay(player, firePoint, params)
 		
+		PlayTurretFireSound(firePointPosition)
 		local resultIsRaycastResult = typeof(fireRayResult) == "RaycastResult"
 		local resultIsVector3 = typeof(fireRayResult) == "Vector3"
 		
@@ -209,7 +243,6 @@ local function ShootTurret(turret: Model)
 			
 			local character = player.Character
 			if(not character) then return end
-			--TODO: switch to alive character
 			local instanceIsInCharacter: boolean? = CharacterHelper.IsPartExistentInCharacter(character,
 				resultInstance
 			)

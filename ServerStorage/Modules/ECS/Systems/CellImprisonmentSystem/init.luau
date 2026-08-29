@@ -23,8 +23,8 @@ const TimeHelper = require(Time.TimeHelper)
 const Promise = require(Utilities.Promise)
 const t = require(Utilities.t)
 
-const ProximityInteractionSystemSignals = require("./ProximityInteractionSystem/Signals")
-const ProximityInteractionSystemConfig = require("./ProximityInteractionSystem/Config")
+const ProximityInteractionSystemSignals = require(ReplicatedStorage.Modules.ECS.Systems.ProximityInteractionSystem.Signals)
+const ProximityInteractionSystemConfig = require(ReplicatedStorage.Modules.ECS.Systems.ProximityInteractionSystem.Config)
 const CellImprisonmentSystemConfig = require("@self/Config")
 const NetworkService = require("../../Services/Network/NetworkService")
 const ReplicaConfig = require("../../Constants/ReplicaConfig")
@@ -38,7 +38,7 @@ const imprisonPlayerRE = ReplicatedStorage.Assets.Shared.Remotes.Events.CellImpr
 local CellImprisonmentSystem = {}
 
 
-const imprisonmentReplicas: {[Player]: Replica.Replica} = {}
+CellImprisonmentSystem.imprisonmentReplicas = {}
 
 const function ValidatePlayerToImprison(playerImprisoning: Player, playerToImprison: Player)
 	const playerIsValidFn = t.instanceIsA("Player")
@@ -59,7 +59,7 @@ const function ValidatePlayerToImprison(playerImprisoning: Player, playerToImpri
 	end	
 	
 	const currentFacilityMode = SystemManagerModule.GetGlobalGameState("CurrentMode")
-	if(currentFacilityMode ~= ModeConfig.modes.RoleReversal.Name) then return false end
+	--if(currentFacilityMode ~= ModeConfig.modes.RoleReversal.Name) then return false end
 	
 	if(globalCuffedPlayers[playerImprisoning] ~= playerToImprison) then
 		return false
@@ -100,8 +100,8 @@ const function CreateImprisonPlayerReplica(player: Player): Replica.Replica?
 		return nil
 	end
 	
-	if(imprisonmentReplicas[player]) then
-		return imprisonmentReplicas[player]
+	if(CellImprisonmentSystem.imprisonmentReplicas[player]) then
+		return CellImprisonmentSystem.imprisonmentReplicas[player]
 	end
 	
 	const imprisonmentReplica = Replica.New({
@@ -115,7 +115,7 @@ const function CreateImprisonPlayerReplica(player: Player): Replica.Replica?
 		Token = ReplicaConfig.tokens.CellImprisonment.Token
 	})
 	
-	imprisonmentReplicas[player] = imprisonmentReplica
+	CellImprisonmentSystem.imprisonmentReplicas[player] = imprisonmentReplica
 	
 	return imprisonmentReplica
 end
@@ -153,7 +153,7 @@ const function ResetImprisonmentReplica(player: Player)
 	end
 	
 	
-	const imprisonmentReplica: Replica.Replica = imprisonmentReplicas[player]
+	const imprisonmentReplica: Replica.Replica = CellImprisonmentSystem.imprisonmentReplicas[player]
 	if(not imprisonmentReplica) then return end
 
 	imprisonmentReplica:Set({"Active"}, false)
@@ -170,8 +170,9 @@ function CellImprisonmentSystem.Initialize()
 		end
 		
 		const playerImprisonValid = ValidatePlayerToImprison(player, playerToImprison)
+		print("player imprison valid ", playerImprisonValid)
+
 		if(not playerImprisonValid) then return end
-		
 		NetworkService.SetPlayerNetworkOwnership(playerToImprison)
 		const cufferPlayerEntryRemoved: boolean = CuffService.RemovePlayerFromInvolvedInCuffing(player)
 		if(not cufferPlayerEntryRemoved) then 
@@ -180,7 +181,7 @@ function CellImprisonmentSystem.Initialize()
 		end
 		
 		CollectionService:AddTag(playerToImprison, CellImprisonmentConfig.IMPRISONED_TAG_NAME)
-		
+		print("teleported")
 		TeleportPlayerToJailCell(playerToImprison)
 		const replica = CreateImprisonPlayerReplica(playerToImprison)
 		if(not replica) then return end

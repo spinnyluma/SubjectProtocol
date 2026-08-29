@@ -1,6 +1,8 @@
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+const SoundService = game:GetService("SoundService")
 local TweenService = game:GetService("TweenService")
 local Players = game:GetService("Players")
+const Teams = game:GetService("Teams")
 
 local ClientReplicaConfig = require(ReplicatedStorage.Modules.Shared.Constants.ClientReplicaConfig)
 local AssertHelper = require(ReplicatedStorage.Modules.Helpers.Debug.AssertHelper)
@@ -22,6 +24,8 @@ local voteTimeFillbar: Frame? = nil
 
 local modeLabel: TextLabel? = nil
 local objectiveLabel: TextLabel? = nil
+local modeTimerLabel: TextLabel? = nil
+local objectiveScreen: ScreenGui? = nil
 
 local selectionButton: ImageButton = ReplicatedStorage.Assets.UI.Templates.SelectionButton
 
@@ -71,9 +75,10 @@ local function InitializeUiElements()
 	local voteTime: CanvasGroup = facilityModeContainer:WaitForChild("VoteTime")
 	voteTimeFillbar = voteTime:WaitForChild("Fillbar")
 
-	local objectiveScreen = playerGui:WaitForChild("Objective")
+	objectiveScreen = playerGui:WaitForChild("Objective")
 	local objectiveFrame = objectiveScreen:WaitForChild("ObjectiveFrame")
 	modeLabel = objectiveFrame:WaitForChild("ModeLabel")
+	modeTimerLabel = objectiveFrame:WaitForChild("ModeTimer")
 	objectiveLabel = objectiveFrame:WaitForChild("ObjectiveLabel")
 end
 
@@ -259,8 +264,48 @@ const function PlayRandomActionMusic(): Sound?
 	return sound
 end
 
+const function SetModeTimerLabelText(text: string)
+	const textIsValid, textInvalidityReason = t.string(text)
+	if(not textIsValid) then
+		AssertHelper.Warn(textInvalidityReason)
+		return 
+	end
+	
+	if(not modeTimerLabel) then return end
+	
+	modeTimerLabel.Text = text
+end
+
+const function InitializeObjectiveVisibilityHandler()
+	const localPlayer = Players.LocalPlayer
+	const currentTeam = localPlayer.Team
+	if(objectiveScreen) then
+		if(currentTeam == Teams.Choosing) then
+			objectiveScreen.Enabled = false
+		else
+			objectiveScreen.Enabled = true
+		end	
+	end
+	localPlayer:GetPropertyChangedSignal("Team"):Connect(function()
+		if(not objectiveScreen) then return end
+		
+		if(localPlayer.Team == Teams.Choosing) then
+			objectiveScreen.Enabled = false
+		else
+			objectiveScreen.Enabled = true
+		end
+	end)
+end
+
 function FacilityModeUiSystem.Initialize()
-	InitializeUiElements()
+	Promise.try(function()
+		InitializeUiElements()
+		InitializeObjectiveVisibilityHandler()
+
+	end)
+		:catch(function(err)
+			AssertHelper.Warn(tostring(err))
+		end)
 	Replica.OnNew(ClientReplicaConfig.replicaTokenNames.Mode.Name, function(replica: Replica.Replica)
 
 		local data = replica.Data
@@ -335,8 +380,6 @@ function FacilityModeUiSystem.Initialize()
 				SetFacilityModeSelectionVisibility(false)
 			end
 		end)
-			
-		
 	end)
 
 	Replica.OnNew(ClientReplicaConfig.replicaTokenNames.CurrentMode.Name, function(replica: Replica.Replica)
@@ -352,6 +395,21 @@ function FacilityModeUiSystem.Initialize()
 		replica:OnSet({"CurrentMode"}, function(newMode: any, oldMode: any)
 			currentMode = newMode
 			UpdateObjectiveGui(newMode)
+			
+			const modeSoundConfigEnum = ModeConfig.modeAnnouncementSoundConfigs[newMode]
+			if(modeSoundConfigEnum) then
+				const modeSoundConfig = modeSoundConfigEnum.SoundConfig
+				if(modeSoundConfig) then
+					const modeSound = ClientSoundService.PlayLocalSound(modeSoundConfig)
+					print(modeSound)
+					if(modeSound) then
+						modeSound.Ended:Once(function()
+							modeSound:Destroy()
+						end)
+					end
+			end
+			
+			end
 			if(currentMode ~= ModeConfig.modes.Idle.Name) then
 				currentlyPlayedActionMusic = PlayRandomActionMusic()
 			else
@@ -368,7 +426,19 @@ function FacilityModeUiSystem.Initialize()
 				
 			end
 		end)
+		replica:OnSet({"ModeRemainingTime"}, function(newValue: number, oldValue: number)
+			SetModeTimerLabelText("Mode ends in " .. newValue .. "s")
+		end)
+		
+		replica:OnSet({"ModeVoteCooldown"}, function(newValue: number, oldValue: number)
+			if(newValue == 0) then
+				SetModeTimerLabelText("")
+			else
+				SetModeTimerLabelText("Next mode may be activated in " .. newValue .. "s")
 
+			end
+			
+		end)
 		Players.LocalPlayer:GetPropertyChangedSignal("Team"):Connect(function()
 			UpdateObjectiveGui(currentMode)
 		end)

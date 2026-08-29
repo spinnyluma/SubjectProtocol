@@ -9,7 +9,7 @@ const t = require("../../Utilities/t")
 
 local ClientSoundReplicationService = {}
 
-local function SetUpSoundFromSoundConfig(soundConfig: SoundConfig.SoundConfig)
+function ClientSoundReplicationService.SetUpSoundFromSoundConfig(soundConfig: SoundConfig.SoundConfig)
 	const soundConfigIsValid = AssertHelper.InvalidArgAssert(
 		type(soundConfig) == "table",
 		soundConfig,
@@ -92,7 +92,7 @@ function ClientSoundReplicationService.PlaySoundFromPart(part: BasePart, soundCo
 	)
 	if not soundConfigIsValid then return end
 
-	const sound = SetUpSoundFromSoundConfig(soundConfig)
+	const sound = ClientSoundReplicationService.SetUpSoundFromSoundConfig(soundConfig)
 	if not sound then return end
 
 	sound.Parent = part
@@ -125,7 +125,7 @@ function ClientSoundReplicationService.PlaySoundFromPosition(position: Vector3, 
 	const attachment = Instance.new("Attachment")
 	attachment.WorldCFrame = CFrame.new(position)
 
-	const sound = SetUpSoundFromSoundConfig(soundConfig)
+	const sound = ClientSoundReplicationService.SetUpSoundFromSoundConfig(soundConfig)
 	if not sound then
 		attachment:Destroy()
 		return
@@ -136,7 +136,7 @@ function ClientSoundReplicationService.PlaySoundFromPosition(position: Vector3, 
 	attachment.Parent = workspace
 	sound:Play()
 
-	sound.Ended:Connect(function()
+	sound.Ended:Once(function()
 		sound:Destroy()
 		attachment:Destroy()
 	end)

@@ -4,11 +4,35 @@ local ServerStorage = game:GetService("ServerStorage")
 local Players = game:GetService("Players")
 local Teams = game:GetService("Teams")
 
+const Modules = ReplicatedStorage.Modules
+const Assets = ReplicatedStorage.Assets
+
+const Utilities = Modules.Utilities
+const Helpers = Modules.Helpers
+const ECS = Modules.ECS
+
+const Shared = Assets.Shared
+
+const RaycastWeapon = Helpers.RaycastWeapon
+const Time = Helpers.Time
+const Tool = Helpers.Tool
+
+const Systems = ECS.Systems
+
+const Remotes = Shared.Remotes
+
+const Events = Remotes.Events
+
+const reloadWeaponRE = Events.ReloadWeapon
+
+const ClientRaycastWeaponConfig = require(Systems.ClientRaycastWeaponSystem.Config)
 local HostilitySystemSignals = require(ServerStorage.Modules.ECS.Systems.HostilitySystem.Signals)
 local CombatServiceSignals = require(ReplicatedStorage.Modules.Services.Combat.CombatService.Signals)
 local CombatServiceConfig = require(ReplicatedStorage.Modules.Services.Combat.CombatService.Config)
+const RaycastWeaponHelper = require(RaycastWeapon.RaycastWeaponHelper)
 local SpatialQueryConfig = require(ReplicatedStorage.Modules.Shared.Constants.SpatialQueryConfig)
 local SpatialQueryHelper  = require(ReplicatedStorage.Modules.Helpers.SpatialQuery.SpatialQueryHelper)
+const ClientSoundConfig = require(ReplicatedStorage.Modules.Shared.Constants.Sound.SoundConfig)
 local WeaponDataConfig = require(ReplicatedStorage.Modules.Shared.Constants.WeaponDataConfig)
 local CharacterConfig = require(ReplicatedStorage.Modules.Shared.Constants.CharacterConfig)
 local CharacterHelper = require(ReplicatedStorage.Modules.Helpers.Character.CharacterHelper)
@@ -17,12 +41,16 @@ local CombatService = require(ReplicatedStorage.Modules.Services.Combat.CombatSe
 local AssertHelper = require(ReplicatedStorage.Modules.Helpers.Debug.AssertHelper)
 local CombatHelper = require(ServerStorage.Modules.Helpers.Combat.CombatHelper)
 local TableHelper = require(ReplicatedStorage.Modules.Helpers.Table.TableHelper)
+const TimeHelper = require(Time.TimeHelper)
+const ToolHelper = require(Tool.ToolHelper)
+const Promise = require(Utilities.Promise)
+const t = require(Utilities.t)
 
 local RaycastWeaponConfig = require(script.Config)
 
-const SoundReplicationService = require("../../Services/Sound/SoundReplicationService")
 const SoundReplicationSystemConfig = require("./SoundReplicationSystem/Config")
-const ClientSoundConfig = require(ReplicatedStorage.Modules.Shared.Constants.Sound.SoundConfig)
+const SoundReplicationService = require("../../Services/Sound/SoundReplicationService")
+const FirerateService = require("../../Services/Firerate/FirerateService")
 
 local subjectsTeam = Teams.Subjects
 
@@ -31,6 +59,8 @@ local fireRayRE = ReplicatedStorage.Assets.Shared.Remotes.Events.FireRay
 local HIT_POSITION_MAGNITUDE_BUFFER = 12
 
 local RaycastWeaponSystem = {}
+
+local fireRateThreads: {[Model]: thread} = {}
 
 local function GetServerRaycastParams(instanceHit: Instance?)
 	local instanceHitIsValid = AssertHelper.InvalidArgAssert(
@@ -174,6 +204,38 @@ local function ValidateRay(player: Player, weaponDataConfig: WeaponDataConfig.Ra
 	end
 end
 
+
+
+const function ValidateWeaponCanBeReloaded(weapon: Tool)
+	const toolIsValidFn = t.instanceIsA("Tool")
+	const weaponIsValid, weaponInvalidReason = toolIsValidFn(weapon)
+	if(not weaponIsValid) then 
+		AssertHelper.Warn(weaponInvalidReason)
+		return
+	end
+	
+	const weaponHasAmmoAttribute: boolean = RaycastWeaponHelper.HasAmmoAttribute(weapon)
+	if(not weaponHasAmmoAttribute) then
+		return false
+	end
+
+	const weaponAmmoAttribute: number? = weapon:GetAttribute("A_Ammo")
+	const maxAmmoAttribute: number? = weapon:GetAttribute("A_MaxAmmo")
+	const numberMin0Fn= t.numberMin(0)
+	const maxAmmoAttributeIsValid, maxAmmoAttributeInvalidReason = numberMin0Fn(maxAmmoAttribute)
+	if(not maxAmmoAttributeIsValid) then
+		return false
+	end
+	const numberMaxAmmoFn = t.numberMaxExclusive(0, maxAmmoAttribute)
+	const weaponAmmoAttributeConstrainedValid, ammoConstrainedInvalidReason = numberMaxAmmoFn(weaponAmmoAttribute)
+	if(not weaponAmmoAttributeConstrainedValid) then
+		return false
+	end
+	
+	return true
+	
+end
+
 local function DamageCharacter(instance: Instance)
 	local instanceIsValid = AssertHelper.InvalidArgAssert(
 		typeof(instance) == "Instance",
@@ -201,25 +263,129 @@ local function DamageCharacter(instance: Instance)
 	humanoid:TakeDamage(7)
 end
 
+const function SetAmmoAmount(weapon: Tool, ammo: number)
+	const toolIsValidFn = t.instanceIsA("Tool")
+	const weaponIsValid, weaponInvalidReason = toolIsValidFn(weapon)
+	if(not weaponIsValid) then 
+		AssertHelper.Warn(weaponInvalidReason)
+		return
+	end
+
+	weapon:SetAttribute("A_Ammo", ammo)
+end
+
+const function ValidateWeaponReload(playerFiring: Player, weapon: Tool)
+	const playerIsValidFn = t.instanceIsA("Player")
+	const playerIsValid, playerInvalidReason = playerIsValidFn(playerFiring)
+	if(not playerIsValid) then 
+		AssertHelper.Warn(playerInvalidReason)
+		return false
+	end
+	
+	const toolIsValidFn = t.instanceIsA("Tool")
+	const weaponIsValid, weaponInvalidReason = toolIsValidFn(weapon)
+	if(not weaponIsValid) then 
+		AssertHelper.Warn(weaponInvalidReason)
+		return false
+	end
+	
+	const weaponCanBeReloaded = ValidateWeaponCanBeReloaded(weapon)
+	if(not weaponCanBeReloaded) then
+		return false
+	end
+	
+	const playerCharacter = playerFiring.Character
+	if(not playerCharacter) then return false end
+	const toolBelongsToPlayer = ToolHelper.ToolBelongsToCharacter(weapon, playerCharacter)
+	if(not toolBelongsToPlayer) then
+		return false
+	end
+	
+	return true
+end
+
+const function ReloadWeapon(weapon: Tool)
+	const toolIsValidFn = t.instanceIsA("Tool")
+	const weaponIsValid, weaponInvalidReason = toolIsValidFn(weapon)
+	if(not weaponIsValid) then 
+		AssertHelper.Warn(weaponInvalidReason)
+		return
+	end
+	
+	const maxAmmoAttribute = weapon:GetAttribute("A_MaxAmmo")
+	const numberMin0Fn= t.numberMin(0)
+	local maxAmmoAttributeIsValid, maxAmmoAttributeInvalidReason = numberMin0Fn(maxAmmoAttribute)
+	if(not maxAmmoAttributeIsValid) then
+		AssertHelper.Warn(maxAmmoAttributeInvalidReason)
+		return
+	end
+	
+	weapon:SetAttribute("A_Ammo", maxAmmoAttribute)
+end
 
 
 function RaycastWeaponSystem.Initialize()
+	reloadWeaponRE.OnServerEvent:Connect(function(player: Player, weapon: Tool)
+		const playerIsValidFn = t.instanceIsA("Player")
+		local playerIsValid, playerInvalidReason = playerIsValidFn(player)
+		if(not playerIsValid) then
+			return
+		end
+		
+		const toolIsValidFn = t.instanceIsA("Tool")
+		const weaponIsValid, weaponInvalidReason = toolIsValidFn(weapon)
+		if(not weaponIsValid) then
+			return
+		end		
+		
+		const reloadTime: number? = weapon:GetAttribute(ClientRaycastWeaponConfig.RELOAD_ATTR_NAME)
+		const reloadTimeIsValid, reloadTimeInvalidReason = t.number(reloadTime)
+		if(not reloadTimeIsValid) then
+			AssertHelper.Warn(reloadTimeInvalidReason)
+			return
+		end
+		
+		Promise.try(function()
+			TimeHelper.CreateCountdownInSeconds(reloadTime)
+			ReloadWeapon(weapon)
+		end)
+			:catch(function(err)
+				AssertHelper.Warn(tostring(err))
+			end)
+	end)
+	
+	
 	fireRayRE.OnServerEvent:Connect(function(player: Player, weaponDataConfig: WeaponDataConfig.RaycastPacket)
 		if(not weaponDataConfig) then return end
 		local rayIsValid = ValidateRay(player, weaponDataConfig)
 		local playerCharacter = player.Character
 		if(not playerCharacter) then return end
 		local playerCharacterIsDead = CharacterHelper.IsCharacterDead(playerCharacter)
-		
-		
 		if(not rayIsValid
 			or (playerCharacterIsDead)) then
 			return
 		end
+		
+			
+
+		-- Check and deduct ammo
+		local weapon = weaponDataConfig.Weapon
+		if(typeof(weapon) == "Instance" and weapon:IsA("Model")) then
+			
+			
+			local hasAmmo = RaycastWeaponHelper.HasAmmoAttribute(weapon)
+			if(hasAmmo) then
+				local currentAmmo = weapon:GetAttribute("A_Ammo")
+				if(typeof(currentAmmo) == "number" and currentAmmo > 0) then
+					weapon:SetAttribute("A_Ammo", currentAmmo - 1)
+				else
+					return -- No ammo left
+				end
+			end
+		end
 		local instanceHit = weaponDataConfig.InstanceHit
 		local instanceHitIsValid = typeof(instanceHit) == "Instance"
 			and instanceHit:IsA("BasePart")
-		
 		
 		if(instanceHitIsValid) then
 			local weapon = weaponDataConfig.Weapon
@@ -259,10 +425,29 @@ function RaycastWeaponSystem.Initialize()
 
 				
 			local playerTeam = player.Team 
+			
+			const fireRate = weapon:GetAttribute(ClientRaycastWeaponConfig.FIRE_RATE_ATTR_NAME)
+			const fireRateIsValid, fireRateInvalidReason = t.number(fireRate)
+			if(not fireRateIsValid) then 
+				AssertHelper.Warn(fireRateInvalidReason)
+				return 
+			end
+			
+			const fireStartTime = weaponDataConfig.ShootStartTime
+			if(not fireStartTime) then return end
+			const weaponInCooldown = FirerateService.IsWeaponInCooldown(weaponDataConfig.Weapon, fireRate)
+			if(weaponInCooldown) then
+				return
+			else
+				FirerateService.AddFirerateStartTime(weapon, fireStartTime, fireRate)
+			end
+			
 			CombatService.ReplicateRay(firePoint, endPosition, otherPlayers, {
 				Team = playerTeam
 			})
 			SoundReplicationService.ReplicateSound(otherPlayers, ClientSoundConfig.clientSoundConfigs.Gun.PistolGunshot)
+			
+			
 			local instanceBelongsToCharacter = CharacterHelper.IsPartInCharacterModel(instanceHit)
 			local instanceBelongsToDamageableObject = CombatService.IsInstancePartOfDamageableObject(instanceHit)
 			

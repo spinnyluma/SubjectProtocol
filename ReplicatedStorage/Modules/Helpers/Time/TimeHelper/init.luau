@@ -53,7 +53,7 @@ function TimeHelper.CreateCountdownInSeconds(numberOfSeconds: number, callbackOn
 		task.wait()
 		currentTime = os.clock()
 	end
-	
+	print("os.clock after ", os.clock())
 	return true
 end
 
@@ -106,6 +106,55 @@ function TimeHelper.CreateCountdownInSecondsPrecise(numberOfSeconds: number, cal
 		end
 
 		secondsRemaining = math.max(0, endTime - os.time())
+	end
+
+	return true
+end
+
+
+--[[
+	Counts down until the current server time reaches serverEndTime.
+	Uses Workspace:GetServerTimeNow() so the timer stays synchronized between server and clients.
+	Ticks every frame; the callback receives the seconds remaining.
+	This function yields.
+
+	@yields
+	@param number serverEndTime The target Unix timestamp (obtained through Workspace:GetServerTimeNow()) to count down until.
+	@param function callbackOnTick The function to call on each tick. Receives the seconds remaining.
+	@returns boolean Whether the countdown successfully counted down.
+]]
+function TimeHelper.CreateCountdownUntilServerEndTime(serverEndTime: number, callbackOnTick: (any?) -> (any?)): boolean
+	local serverEndTimeIsValid = AssertHelper.InvalidArgAssert(
+		type(serverEndTime) == "number",
+		serverEndTime,
+		"serverEndTime",
+		"TimeHelper.CreateCountdownUntilServerEndTime",
+		"number"
+	)
+	if(not serverEndTimeIsValid) then return false end
+
+	local callbackOnTickIsValid = AssertHelper.InvalidArgAssert(
+		type(callbackOnTick) == "function"
+			or type(callbackOnTick) == "nil",
+		callbackOnTick,
+		"callbackOnTick",
+		"TimeHelper.CreateCountdownUntilServerEndTime",
+		"function?"
+	)
+	if(not callbackOnTickIsValid) then return false end
+
+	local currentTime = workspace:GetServerTimeNow()
+
+	while (currentTime < serverEndTime) do
+		if(callbackOnTick) then
+			local timeRemaining = serverEndTime - currentTime
+			local flag = callbackOnTick(timeRemaining)
+			if(flag == TimeConfig.countdownFlags.CancelCountdown.Name) then
+				return false
+			end
+		end
+		task.wait()
+		currentTime = workspace:GetServerTimeNow()
 	end
 
 	return true

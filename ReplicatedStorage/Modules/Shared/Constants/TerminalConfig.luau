@@ -2,6 +2,8 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local TeamConfig = require(ReplicatedStorage.Modules.Shared.Constants.TeamConfig)
 
+const HintConfig = require("./Hint/HintConfig")
+
 local TerminalConfig = {}
 
 export type TerminalContestState = keyof<typeof(TerminalConfig.terminalContestStates)>
@@ -96,9 +98,15 @@ TerminalConfig.terminalOwnerCaptureTimeStates = {
 	}
 }
 
-
+TerminalConfig.captureHints = {
+	SubjectsControlling = {
+		Name = "SubjectsControlling",
+		Hint = "Attention. Terminal control compromised.",
+		HintColor = HintConfig.hintColors.Warning.Name
+	}
+}
 
 
 TerminalConfig.TIME_TO_CAPTURE = 2
-TerminalConfig.TIME_TO_OWN_TERMINAL = 60
+TerminalConfig.TIME_TO_OWN_TERMINAL = 5
 return TerminalConfig

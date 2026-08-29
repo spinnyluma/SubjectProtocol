@@ -1,10 +1,17 @@
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local Players = game:GetService("Players")
 local TweenService = game:GetService("TweenService")
+local Players = game:GetService("Players")
+const Teams = game:GetService("Teams")
 
 local AssertHelper = require(ReplicatedStorage.Modules.Helpers.Debug.AssertHelper)
 local Replica = require(ReplicatedStorage.Modules.Utilities.ReplicaClient)
 local Trove = require(ReplicatedStorage.Modules.Utilities.Trove)
+
+const ClientSoundReplicationService = require("../../Services/SoundReplication/ClientSoundReplicationService")
+const TerminalUiSystemConfig = require("@self/Config")
+const ClientSoundService = require("../../Services/Sound/ClientSoundService")
+const Promise = require("../../Utilities/Promise")
+
 -- TROVE!!! means i need to store tween of capture time text and check if it is playing so i need to cancel it when setting capture time text visibility
 local ClientReplicaConfig = require(ReplicatedStorage.Modules.Shared.Constants.ClientReplicaConfig)
 local TerminalConfig = require(ReplicatedStorage.Modules.Shared.Constants.TerminalConfig)
@@ -325,8 +332,40 @@ local function SetTerminalFillbarVisibility(isVisible: boolean)
 	
 	terminalFillbarContainer.GroupTransparency = transparency
 end
+
+const function InitializeTerminalVisibilityHandler()
+	const localPlayer = Players.LocalPlayer
+	
+	const currentTeam = localPlayer.Team
+	if(terminalOwner) then
+		if(currentTeam == Teams.Choosing) then
+			terminalOwner.Enabled = false
+		else
+			terminalOwner.Enabled = true
+		end
+	end
+	localPlayer:GetPropertyChangedSignal("Team"):Connect(function()
+		if(not terminalOwner) then return end
+		
+		if(localPlayer.Team == Teams.Choosing) then
+			terminalOwner.Enabled = false
+		else
+			terminalOwner.Enabled = true
+		end
+	end)
+	
+end
+
 function TerminalUiSystem.Initialize()
-	InitializeUiElements()
+	Promise.try(function()
+		InitializeUiElements()
+		InitializeTerminalVisibilityHandler()
+
+	end)
+		:catch(function(err)
+			AssertHelper.Warn(tostring(err))
+		end)
+	
 	
 	Replica.OnNew(ClientReplicaConfig.replicaTokenNames.Terminal.Name, function(replica)
 		local data = replica.Data
@@ -492,7 +531,8 @@ function TerminalUiSystem.Initialize()
 			newValue: Team,
 			oldValue: Team
 		)
-			
+			ClientSoundService.PlayLocalSound(TerminalUiSystemConfig.terminalAnnouncementSoundConfigs.TerminalCompromised.SoundConfig)
+
 			if(newValue ~= TeamConfig.teams.Guards.Team) then
 				SetTerminalTimeVisibility(true)	
 				TweenTerminalFillbarVisibility(true)

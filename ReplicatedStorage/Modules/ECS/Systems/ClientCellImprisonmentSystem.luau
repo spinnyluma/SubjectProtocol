@@ -212,7 +212,7 @@ const function SetJailedScreenGuiState(state: boolean)
 	const stateIsValid = t.boolean(state)
 	if(not stateIsValid) then return end
 	if(not jailed) then return end
-	
+	print("jailed state is", state)
 	jailed.Enabled = state
 end
 

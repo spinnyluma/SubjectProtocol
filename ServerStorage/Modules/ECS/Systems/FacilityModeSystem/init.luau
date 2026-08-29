@@ -2,29 +2,24 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local ServerStorage = game:GetService("ServerStorage")
 local Teams = game:GetService("Teams")
 
-
-local TerminalSignals = require(ServerStorage.Modules.ECS.Systems.TerminalControlSystem.Signals)
-
-local TeamConfig = require(ReplicatedStorage.Modules.Shared.Constants.TeamConfig)
 local ClientReplicaConfig = require(ReplicatedStorage.Modules.Shared.Constants.ClientReplicaConfig)
+local SystemManagerModule = require(ReplicatedStorage.Modules.ECS.SystemManagerModule)
+local DictionaryHelper = require(ReplicatedStorage.Modules.Helpers.Table.DictionaryHelper)
+local TerminalSignals = require(ServerStorage.Modules.ECS.Systems.TerminalControlSystem.Signals)
+local ReplicaConfig = require(ServerStorage.Modules.Constants.ReplicaConfig)
+local AssertHelper = require(ReplicatedStorage.Modules.Helpers.Debug.AssertHelper)
+local TableHelper = require(ReplicatedStorage.Modules.Helpers.Table.TableHelper)
 local ModeConfig = require(ReplicatedStorage.Modules.Shared.Constants.ModeConfig)
-local FacilityModeConfig = require(script.Config)
-
+local TeamConfig = require(ReplicatedStorage.Modules.Shared.Constants.TeamConfig)
+local TimeHelper = require(ReplicatedStorage.Modules.Helpers.Time.TimeHelper)
+local Promise = require(ReplicatedStorage.Modules.Utilities.Promise)
+local Replica = require(ServerStorage.Modules.Utilities.ReplicaServer)
+local Trove = require(ReplicatedStorage.Modules.Utilities.Trove)
 
 local FacilityModeSignals = require(script.Signals)
+local FacilityModeConfig = require(script.Config)
 
-
-local Trove = require(ReplicatedStorage.Modules.Utilities.Trove)
-local Replica = require(ServerStorage.Modules.Utilities.ReplicaServer)
-local ReplicaConfig = require(ServerStorage.Modules.Constants.ReplicaConfig)
-local Promise = require(ReplicatedStorage.Modules.Utilities.Promise)
-
-local AssertHelper = require(ReplicatedStorage.Modules.Helpers.Debug.AssertHelper)
-local TimeHelper = require(ReplicatedStorage.Modules.Helpers.Time.TimeHelper)
-local DictionaryHelper = require(ReplicatedStorage.Modules.Helpers.Table.DictionaryHelper)
-local TableHelper = require(ReplicatedStorage.Modules.Helpers.Table.TableHelper)
-
-local SystemManagerModule = require(ReplicatedStorage.Modules.ECS.SystemManagerModule)
+const FacilityModeSystemConfig = require("@self/Config")
 
 local teamPlayerAddedConnection: RBXScriptConnection? = nil
 local facilityModeSelectionTrove: Trove.Trove = Trove.new()
@@ -35,10 +30,12 @@ local currentMode: ModeConfig.Mode? = ModeConfig.modes.Idle.Name
 local voteOccurredForCurrentSubjectCapture = false
 
 local submitModeVoteRE: RemoteEvent = ReplicatedStorage.Assets.Shared.Remotes.Events.SubmitModeVote
+const sendHintRE: RemoteEvent = ReplicatedStorage.Assets.Shared.Remotes.Events.SendHint
+
 
 local subjectsTeam = Teams:FindFirstChild("Subjects")
 
-local modeReplica = Replica.New({
+local modesReplica = Replica.New({
 	Token = Replica.Token(ClientReplicaConfig.replicaTokenNames.Mode.Name),
 	Data = {
 		VoteOngoing = false,
@@ -49,7 +46,9 @@ local modeReplica = Replica.New({
 local currentModeReplica = Replica.New({
 	Token = ReplicaConfig.tokens.CurrentMode.Token,
 	Data = {
-		CurrentMode = currentMode
+		CurrentMode = currentMode,
+		ModeRemainingTime = -1,
+		ModeVoteCooldown = -1
 	}
 })
 
@@ -121,24 +120,24 @@ local function ReplicateReplicaToSubjects()
 	local subjectsPlayers = subjectsTeam:GetPlayers()
 	
 	for _, player in subjectsPlayers do
-		modeReplica:Subscribe(player)
+		modesReplica:Subscribe(player)
 	end
 	
 	
 	Replica.NewReadyPlayer:Connect(function(player: Player)
 		if(player.Team == subjectsTeam) then
-			modeReplica:Subscribe(player)
+			modesReplica:Subscribe(player)
 		end
 	end)
 	subjectsTeam.PlayerAdded:Connect(function(player: Player)
 		if(Replica.ReadyPlayers[player]) then
-			modeReplica:Subscribe(player)
+			modesReplica:Subscribe(player)
 		end
 	end)
 	
 	subjectsTeam.PlayerRemoved:Connect(function(player: Player)
 		if(Replica.ReadyPlayers[player]) then
-			modeReplica:Unsubscribe(player)
+			modesReplica:Unsubscribe(player)
 		end
 	end)
 end
@@ -196,7 +195,7 @@ local function ResetModeVote()
 	voteOngoing = false
 	table.clear(currentVotes)
 	table.clear(currentRandomModes)
-	modeReplica:SetValues({}, {
+	modesReplica:SetValues({}, {
 		VoteOngoing = false,
 		Modes = {},
 		VoteEndTime = 0,
@@ -245,7 +244,15 @@ local function SetSelectedMode(mode: ModeConfig.Mode)
 	
 	currentMode = mode
 	if(oldMode ~= currentMode) then
+		
 		FacilityModeSignals.ModeChanged:Fire(currentMode, oldMode)
+	end
+	
+	const modeHintEnum = FacilityModeSystemConfig.modeChangedHints[mode]
+	if(modeHintEnum) then
+		
+		sendHintRE:FireAllClients(modeHintEnum.Hint, modeHintEnum.HintColor)
+
 	end
 	SystemManagerModule.SetGlobalGameState("CurrentMode", currentMode)
 	currentModeReplica:Set({"CurrentMode"}, currentMode)
@@ -284,20 +291,29 @@ local function InitializeModeVoteProcess()
 			end
 		end)
 		:andThen(function()
-			local modeDurationEndedSuccess = TimeHelper.CreateCountdownInSeconds(ModeConfig.MODE_DURATION)
+			local modeDurationEndedSuccess = TimeHelper.CreateCountdownInSecondsPrecise(ModeConfig.MODE_DURATION, function(secondsRemaining)
+				currentModeReplica:Set({"ModeRemainingTime"}, secondsRemaining)
+			end)
 			if(not modeDurationEndedSuccess) then
 				return Promise.reject("Mode duration countdown could not be started properly")
 			end
+			
 			SetSelectedMode(ModeConfig.modes.Idle.Name)
+			voteOccurredForCurrentSubjectCapture = false
+
 		end)
 		:andThen(function()
 			local currentModeVoteCooldown = SystemManagerModule.GetGlobalGameState("ModeVoteCooldown")
-			local modeVoteCooldownEndTime = os.clock() + currentModeVoteCooldown
-			while (os.clock() < modeVoteCooldownEndTime) do
-				task.wait()
-				SystemManagerModule.SetGlobalGameState("ModeVoteCooldown", modeVoteCooldownEndTime - os.clock())
-			end
+			local modeVoteCooldownEndTime = os.time() + currentModeVoteCooldown
+			local numberOfSecondsCooldown = modeVoteCooldownEndTime - os.time()
+			TimeHelper.CreateCountdownInSecondsPrecise(numberOfSecondsCooldown, function(secondsRemaining)
+				SystemManagerModule.SetGlobalGameState("ModeVoteCooldown", secondsRemaining)
+				currentModeReplica:Set({"ModeVoteCooldown"}, secondsRemaining)
+
+			end)
+			
 			SystemManagerModule.SetGlobalGameState("ModeVoteCooldown", 0)
+			currentModeReplica:Set({"ModeVoteCooldown"}, 0)
 		end)
 		:catch(function(error)
 			AssertHelper.Warn(tostring(error))
@@ -344,7 +360,7 @@ local function SetupOnModeVoteVariables()
 
 	currentRandomModes = modes
 	local voteEndTime = workspace:GetServerTimeNow() + ModeConfig.MODE_VOTE_TIME
-	modeReplica:SetValues({}, {
+	modesReplica:SetValues({}, {
 		VoteOngoing = true,
 		Modes = modes,
 		VoteEndTime = voteEndTime
@@ -371,7 +387,6 @@ function FacilityModeSystem.Initialize()
 	end)
 	
 	TerminalSignals.TerminalOwnerCaptureTimeMaxReached:Connect(function()
-
 		if(voteOccurredForCurrentSubjectCapture) then return end
 
 		local facilityModeCooldown = SystemManagerModule.GetGlobalGameState("ModeVoteCooldown")

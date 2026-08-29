@@ -5,7 +5,8 @@ export type RaycastPacket = {
 	Origin: Vector3,
 	Direction: Vector3,
 	EndPosition: Vector3,
-	InstanceHit: Instance?
+	InstanceHit: Instance?,
+	ShootStartTime: number?
 }
 
 export type HitboxPacket = {

@@ -1,14 +1,28 @@
-local ServerStorage = game:GetService("ServerStorage")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local ServerStorage = game:GetService("ServerStorage")
+const Players = game:GetService("Players")
 
-local ProximityConfig = require(ServerStorage.Modules.ECS.Systems.ProximityInteractionSystem.Config)
-local ProximitySignals = require(ServerStorage.Modules.ECS.Systems.ProximityInteractionSystem.Signals)
+const Modules = ReplicatedStorage.Modules
+
+const Shared = Modules.Shared
+
+const Constants = Shared.Constants
+
+const Sound = Constants.Sound
+
+local ProximitySignals = require(ReplicatedStorage.Modules.ECS.Systems.ProximityInteractionSystem.Signals)
+local ProximityConfig = require(ReplicatedStorage.Modules.ECS.Systems.ProximityInteractionSystem.Config)
 local AssertHelper = require(ReplicatedStorage.Modules.Helpers.Debug.AssertHelper)
+const SoundConfig = require(Sound.SoundConfig)
 local DoorConfig = require(ReplicatedStorage.Modules.Shared.Constants.DoorConfig)
 
 local KeycardConfig = require(script.Config)
 
+const SoundReplicationService = require("../../Services/Sound/SoundReplicationService")
+
 local KeycardInteractionSystem = {}
+
+
 
 
 local function InitiateKeycardInteraction(
@@ -77,6 +91,8 @@ local function InitiateKeycardInteraction(
 		)
 		if not closingDurationAttributeIsValid then return end
 		securityDoor:SetAttribute(DoorConfig.DOOR_STATE_ATTR_NAME, "Open")
+		
+		
 		task.delay(openDurationAttribute, function()
 			securityDoor:SetAttribute(DoorConfig.DOOR_STATE_ATTR_NAME, "Closing")
 			task.delay(closingDurationAttribute, function()

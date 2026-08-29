@@ -1,9 +1,14 @@
-local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local CollectionService = game:GetService("CollectionService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local TweenService = game:GetService("TweenService")
+const Players = game:GetService("Players")
 
 local AssertHelper = require(ReplicatedStorage.Modules.Helpers.Debug.AssertHelper)
 local DoorConfig = require(ReplicatedStorage.Modules.Shared.Constants.DoorConfig)
+
+const ClientSoundReplicationService = require("../../Services/SoundReplication/ClientSoundReplicationService")
+const ClientSoundService = require("../../Services/Sound/ClientSoundService")
+const SoundConfig = require("../../Shared/Constants/Sound/SoundConfig")
 
 local DoorStateSystem = {}
 
@@ -15,6 +20,16 @@ local DoorTweenInfo = TweenInfo.new(
 	false,
 	0
 )
+
+const function PlaySecurityDoorSounds(securityDoor: Model)
+	const securityDoorPivot: CFrame = securityDoor:GetPivot()
+	const securityDoorPosition = securityDoorPivot.Position
+
+	const baseSoundConfig = SoundConfig.clientSoundConfigs.Environment.MetalDoorOpen
+	const baseKeycardSoundConfig = SoundConfig.clientSoundConfigs.Environment.KeycardUnlock
+	ClientSoundReplicationService.PlaySoundFromPosition(securityDoorPosition, baseKeycardSoundConfig)
+	ClientSoundReplicationService.PlaySoundFromPosition(securityDoorPosition, baseSoundConfig)
+end
 
 local function SetDoorSegmentState(segment: BasePart, state: boolean)
 	local segmentIsValid = AssertHelper.InvalidArgAssert(
@@ -93,6 +108,7 @@ local function InitializeDoorStateHandlers()
 			)
 			if not (lowerSegmentIsValid) then return end
 			if(doorState == DoorConfig.doorStates.Open.Name) then
+				PlaySecurityDoorSounds(door)
 				SetDoorSegmentState(upperSegment, true)
 				SetDoorSegmentState(lowerSegment, true)
 			elseif(doorState == DoorConfig.doorStates.Closing.Name) then

@@ -1,13 +1,16 @@
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Teams = game:GetService("Teams")
+
 local Modules = ReplicatedStorage.Modules
 
 local Shared = Modules.Shared
 
 local Constants = Shared.Constants
 
-local ModeConfig = require(Constants.ModeConfig)
+const Hint = Constants.Hint
 
+const HintConfig = require(Hint.HintConfig)
+local ModeConfig = require(Constants.ModeConfig)
 
 local Config = {}
 
@@ -46,6 +49,33 @@ Config.modeObjectives = {
 			Objective = "Take cover from the incoming bombs"
 		}
 	}
+}
+
+
+Config.modeChangedHints = {
+	[ModeConfig.modes.Idle.Name] = {
+		Name = "Idle",
+		Hint = "Attention. Facility systems restored.",
+		HintColor = HintConfig.hintColors.Info.Name
+	},
+	[ModeConfig.modes.TurretOverride.Name] = {
+		Name = "TurretOverride",
+		Hint = "Attention. Turrets have been overridden.",
+		HintColor = HintConfig.hintColors.Warning.Name
+	},
+	[ModeConfig.modes.RoleReversal.Name] = {
+		Name = "RoleReversal",
+		Hint = "Warning. Subjects are authorized to detain guards.",
+		HintColor = HintConfig.hintColors.Warning.Name
+		
+	},
+	[ModeConfig.modes.FacilityBombardment.Name] = {
+		Name = "FacilityBombardment",
+		Hint = "Warning. Weapon systems have been enabled.",
+		HintColor = HintConfig.hintColors.Warning.Name
+	},
+	
+		
 }
 
 return Config

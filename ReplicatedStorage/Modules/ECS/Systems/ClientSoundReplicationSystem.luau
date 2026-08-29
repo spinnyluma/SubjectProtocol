@@ -25,7 +25,6 @@ local function PlaySound(soundConfig: SoundConfig.SoundConfig)
 	const emittingPosition = soundConfig.EmittingPosition
 	if(not emittingPart
 		and (not emittingPosition)) then return end
-	print("palying sound")
 	if(emittingPart) then
 		ClientSoundReplicationService.PlaySoundFromPart(emittingPart, soundConfig)
 	elseif(emittingPosition) then

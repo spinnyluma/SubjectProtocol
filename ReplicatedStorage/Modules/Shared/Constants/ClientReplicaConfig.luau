@@ -18,6 +18,10 @@ ClientReplicaConfig.replicaTokenNames = {
 	CurrentMode = {
 		Name = "CurrentMode",
 		Value = 3
+	},
+	PlayerStats = {
+		Name = "PlayerStats",
+		Value = 4
 	}
 }
 

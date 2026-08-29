@@ -1,6 +1,7 @@
+local CollectionService = game:GetService("CollectionService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Teams = game:GetService("Teams")
-local CollectionService = game:GetService("CollectionService")
+
 
 local SpatialQueryConfig = require(ReplicatedStorage
 	.Modules
@@ -264,14 +265,13 @@ function CombatService.IsPlayerInViewOfPart(part: Vector3,
 	
 	local direction = unitVector * lengthOfRay
 
-	
 
 	local raycastResult: RaycastResult? = CombatService.FireRay(part.Position,
 		direction,
 		raycastParams
 	)
 	if(not raycastResult) then return false end
-	local instance = raycastResult.Instance
+	local instance = raycastResult.Instance	
 	local instanceExistsInCharacter: boolean = CharacterHelper.IsPartExistentInCharacter(
 		character,
 		instance

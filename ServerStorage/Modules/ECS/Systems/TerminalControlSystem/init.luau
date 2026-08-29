@@ -6,8 +6,8 @@ local RunService = game:GetService("RunService")
 local NamedSignal = require(ReplicatedStorage.Modules.Utilities.NamedSignal)
 
 
-local ProximitySignals = require(ServerStorage.Modules.ECS.Systems.ProximityInteractionSystem.Signals)
-local ProximityConfig = require(ServerStorage.Modules.ECS.Systems.ProximityInteractionSystem.Config)
+local ProximitySignals = require(ReplicatedStorage.Modules.ECS.Systems.ProximityInteractionSystem.Signals)
+local ProximityConfig = require(ReplicatedStorage.Modules.ECS.Systems.ProximityInteractionSystem.Config)
 
 local TeamConfig = require(ReplicatedStorage.Modules.Shared.Constants.TeamConfig)
 local AssertHelper = require(ReplicatedStorage.Modules.Helpers.Debug.AssertHelper)
@@ -23,6 +23,9 @@ local TimeHelper = require(ReplicatedStorage.Modules.Helpers.Time.TimeHelper)
 local Replica = require(ServerStorage.Modules.Utilities.ReplicaServer)
 local Trove = require(ReplicatedStorage.Modules.Utilities.Trove)
 local Promise = require(ReplicatedStorage.Modules.Utilities.Promise)
+
+const sendHintRE = ReplicatedStorage.Assets.Shared.Remotes.Events.SendHint
+
 
 local TerminalControlSystem = {}
 
@@ -186,7 +189,7 @@ local function SetTerminalOwner(newTerminalOwner: Team)
 	
 	if(oldTerminalOwner ~= terminalOwner) then
 		SystemManagerModule.SetGlobalGameState("TerminalOwner", newTerminalOwner)
-		
+		print("teminal owner chagned")
 		TerminalSignals.TerminalOwnerChanged:Fire(terminalOwner, oldTerminalOwner)
 		CancelTerminalOwnerTimePromise()
 		terminalReplica:Set({"TerminalOwnerMaxTimeReached"}, false)
@@ -205,7 +208,9 @@ end
 
 
 local function PerformTerminalOwnerCaptureCountdown()
-
+	sendHintRE:FireAllClients(TerminalConfig.captureHints.SubjectsControlling.Hint,
+		TerminalConfig.captureHints.SubjectsControlling.HintColor
+	)
 	terminalOwnerTimePromise = Promise.try(function()
 		TimeHelper.CreateCountdownInSeconds(TerminalConfig.TIME_TO_OWN_TERMINAL, function(timeElapsed: number)
 			SetTerminalOwnerCaptureTime(timeElapsed)		

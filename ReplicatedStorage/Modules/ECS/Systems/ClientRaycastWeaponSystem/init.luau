@@ -3,6 +3,16 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local UserInputService = game:GetService("UserInputService")
 local Players = game:GetService("Players")
 
+const Assets = ReplicatedStorage.Assets
+
+const Shared = Assets.Shared
+
+const Remotes = Shared.Remotes
+
+const Events = Remotes.Events
+
+const reloadWeaponRE = Events.ReloadWeapon
+
 local RaycastParamsHelper = require(ReplicatedStorage.Modules.Helpers.SpatialQuery.RaycastParamsHelper)
 local SpatialQueryConfig = require(ReplicatedStorage.Modules.Shared.Constants.SpatialQueryConfig)
 local WeaponDataConfig = require(ReplicatedStorage.Modules.Shared.Constants.WeaponDataConfig)
@@ -18,12 +28,25 @@ local Trove = require(ReplicatedStorage.Modules.Utilities.Trove)
 local ClientRaycastWeaponConfig = require(script.Config)
 
 const ClientSoundReplicationService = require("../../Services/SoundReplication/ClientSoundReplicationService")
+const RaycastWeaponStateComponent = require("../Components/RaycastWeaponStateComponent")
+const RaycastWeaponHelper = require("../../Helpers/RaycastWeapon/RaycastWeaponHelper")
+const SystemManagerModule = require("../SystemManagerModule")
 const ClientSoundService = require("../../Services/Sound/ClientSoundService")
 const SoundConfig = require("../../Shared/Constants/Sound/SoundConfig")
+const TimeHelper = require("../../Helpers/Time/TimeHelper")
+const RaycastWeaponStateComponentConfig = require("../Components/RaycastWeaponStateComponent/Config")
+const t = require("../../Utilities/t")
 
 local usingRaycastWeaponInputContext: InputContext = ReplicatedStorage.Assets.Input.Contexts.UsingRaycastWeapon
 
+
 local fireWeaponInputAction: InputAction = ReplicatedStorage.Assets.Input.Contexts.UsingRaycastWeapon.FireWeapon
+const reloadInputAction: InputAction = usingRaycastWeaponInputContext.Reload
+
+const fireWeaponTouchBinding: InputBinding = fireWeaponInputAction.TouchBinding
+const reloadTouchBinding: InputBinding = reloadInputAction.TouchBinding
+
+
 
 local tracerTemplate: Model = ReplicatedStorage.Assets.Ray.Templates.TracerTemplate
 
@@ -36,6 +59,13 @@ local weaponTroves: {[Tool]: Trove.Trove} = {}
 local fireRayRE = ReplicatedStorage.Assets.Shared.Remotes.Events.FireRay
 
 local ClientRaycastWeaponSystem = {}
+
+local ammoScreenGui: ScreenGui? = nil
+local mobileActionButtonsScreenGui: ScreenGui? = nil
+local fireMobileButton: ImageButton? = nil
+local reloadMobileButton: ImageButton? = nil
+local crosshair: ImageLabel? = nil
+local mobileCrosshairScreenGui: ScreenGui? = nil
 
 local raycastWeaponLength = 500
 
@@ -111,22 +141,33 @@ local function FireRaycastWeaponFromMousePosition(weapon: Tool)
 	if(not firePointIsValid) then return end
 	
 	
-	
-	local mouseLocation = UserInputService:GetMouseLocation()
+	local rayLocation: Vector2? = nil
 	
 	Promise.try(function()
 		if(UserInputService.PreferredInput == Enum.PreferredInput.Touch) then
-			local touchPositionInCoreGui = UiHelper.IsJoystickAtPosition(
-				mouseLocation.X,
-				mouseLocation.Y
-			)
-			if(touchPositionInCoreGui) then
+			const imageLabelIsValidFn = t.instanceIsA("ImageLabel")
+			const crosshairIsValid, crosshairInvalidReason = imageLabelIsValidFn(crosshair)
+			if(not crosshairIsValid) then
+				AssertHelper.Warn(crosshairInvalidReason)
 				return
 			end
+			const dividedBy2AbsoluteSize = Vector2.new(
+				crosshair.AbsoluteSize.X / 2,
+				crosshair.AbsoluteSize.Y / 2
+			)
+			rayLocation = Vector2.new(
+				crosshair.Position.X.Scale * currentCamera.ViewportSize.X,
+				crosshair.Position.Y.Scale * currentCamera.ViewportSize.Y
+			)
+
+		elseif(UserInputService.PreferredInput == Enum.PreferredInput.KeyboardAndMouse) then
+			rayLocation = UserInputService:GetMouseLocation()
+			print(rayLocation)
+
 		end
 		local ray = currentCamera:ViewportPointToRay(
-			mouseLocation.X,
-			mouseLocation.Y)
+			rayLocation.X,
+			rayLocation.Y)
 		local params: RaycastParams? = SpatialQueryConfig.GetRaycastParams(ClientRaycastWeaponConfig.SYSTEM_TAG_NAME, {
 			["Self"] = weapon,
 			["AdditionalInstances"] = accessories
@@ -148,9 +189,14 @@ local function FireRaycastWeaponFromMousePosition(weapon: Tool)
 		if(not rayResult) then
 			endPosition = ray.Origin + ray.Direction * raycastWeaponLength
 		else
+			const highlight = Instance.new("Highlight")
+			highlight.Parent = rayResult.Instance
+			task.delay(1, function()
+				highlight:Destroy()
+			end)
 			endPosition = rayResult.Position
 		end
-
+		
 		local realFiringParams = RaycastParamsHelper.CloneRaycastParams(params)
 		local realFiringParamsIsValid = AssertHelper.ExpectedValAssert(
 			typeof(realFiringParams) == "RaycastParams",
@@ -194,12 +240,14 @@ local function FireRaycastWeaponFromMousePosition(weapon: Tool)
 			{Team = localPlayer.Team}
 		)
 
+		const shootStartTime = workspace:GetServerTimeNow()
 		local raycastPacket: WeaponDataConfig.RaycastPacket = {
 			Weapon = weapon,
 			Origin = head.Position,
 			Direction = realFiringRayDirection,
 			EndPosition = realFiringEndPosition,
-			InstanceHit = instanceHit
+			InstanceHit = instanceHit,
+			ShootStartTime = shootStartTime
 		}
 		ClientSoundReplicationService.PlaySoundFromPosition(head.Position, SoundConfig.clientSoundConfigs.Gun.PistolGunshot)
 		fireRayRE:FireServer(raycastPacket)
@@ -208,8 +256,222 @@ local function FireRaycastWeaponFromMousePosition(weapon: Tool)
 		:catch(function(errorMsg)
 			AssertHelper.Warn(tostring(errorMsg))
 		end)
+end
 
+
+
+local function InitializeAmmoUi(weapon: Tool)	
+	const toolIsValidFn = t.instanceIsA("Tool")
+	const weaponIsValid, weaponInvalidReason = toolIsValidFn(weapon)
+	if(not weaponIsValid) then 
+		AssertHelper.Warn(weaponInvalidReason)
+		return 
+	end
+	if not ammoScreenGui then return end
+	ammoScreenGui.Enabled = true
+
+	local background = ammoScreenGui:WaitForChild("Background")
+	local innerBackground = background:WaitForChild("InnerBackground")
+	local ammoContent = innerBackground:WaitForChild("AmmoContent")
+	local textContainer = ammoContent:WaitForChild("TextContainer")
+	local ammoLabel = textContainer:WaitForChild("AmmoLabel")
 	
+	local function updateAmmoText(weapon: Tool)
+		const toolIsValidFn = t.instanceIsA("Tool")
+		const weaponIsValid, weaponInvalidReason = toolIsValidFn(weapon)
+		if(not weaponIsValid) then 
+			AssertHelper.Warn(weaponInvalidReason)
+			return 
+		end
+
+		local currentAmmo = weapon:GetAttribute("A_Ammo")
+		local maxAmmo = weapon:GetAttribute("A_MaxAmmo")
+		if currentAmmo ~= nil and maxAmmo ~= nil then
+			ammoLabel.Text = `{currentAmmo}/{maxAmmo}`
+		elseif currentAmmo ~= nil then
+			ammoLabel.Text = tostring(currentAmmo)
+		end
+	end
+	
+	updateAmmoText(weapon)
+
+	local currentWeaponTrove = weaponTroves[weapon]
+	if currentWeaponTrove then
+		currentWeaponTrove:Add(weapon:GetAttributeChangedSignal("A_Ammo"):Connect(function()
+			updateAmmoText(weapon)
+			
+			const raycastWeaponStateComp: RaycastWeaponStateComponent.RaycastWeaponStateComponent = SystemManagerModule.GetComponentByEntity("RaycastWeaponState", weapon)
+			const raycastWeaponStateCompIsValid, raycastWeaponStateCompInvalidReason = t.interface(RaycastWeaponStateComponent.interface)
+			if(not raycastWeaponStateCompIsValid) then
+				AssertHelper.Warn(raycastWeaponStateCompInvalidReason)
+				return
+			end
+			
+			const currentAmmo = weapon:GetAttribute("A_Ammo")
+			const currentAmmoIsValid, currentAmmoInvalidReason = t.number(currentAmmo)
+			if(not currentAmmoIsValid) then
+				AssertHelper.Warn(currentAmmoInvalidReason)
+				return
+			end
+			
+			raycastWeaponStateComp.PredictedWeaponAmmo = currentAmmo
+		end))
+	end
+end
+
+local function DeinitializeAmmoUi()
+	if not ammoScreenGui then return end
+	ammoScreenGui.Enabled = false
+end
+
+const function DeinitializeRaycastWeapon(weapon: Tool)
+	const toolIsValidFn = t.instanceIsA("Tool")
+	const weaponIsValid, weaponInvalidReason = toolIsValidFn(weapon)
+	if(not weaponIsValid) then
+		AssertHelper.Warn(weaponInvalidReason)
+		return
+	end
+
+	const currentWeaponTrove = weaponTroves[weapon]
+	if(currentWeaponTrove) then
+		currentWeaponTrove:Clean()
+	end
+	weaponTroves[weapon] = nil
+
+	const raycastWeaponStateCompExists: boolean = SystemManagerModule.DoesEntityComponentExist("RaycastWeaponState", weapon)
+	if(raycastWeaponStateCompExists) then
+		SystemManagerModule.RemoveComponent("RaycastWeaponState", weapon)
+	end
+end
+
+const function CleanupOnCharacterDeath()
+	UserInputService.MouseIcon = ""
+	InputSignals.InputContextEnabledChanged:Fire(usingRaycastWeaponInputContext, false)
+
+	DeinitializeAmmoUi()
+
+	if(mobileActionButtonsScreenGui) then
+		mobileActionButtonsScreenGui.Enabled = false
+		mobileCrosshairScreenGui.Enabled = false
+	end
+
+	const localPlayer = Players.LocalPlayer
+	const localPlayerIsValid = AssertHelper.ExpectedValAssert(
+		typeof(localPlayer) == "Instance"
+			and localPlayer:IsA("Player"),
+		localPlayer,
+		"localPlayer",
+		"Player"
+	)
+	if(not localPlayerIsValid) then return end
+
+	const selectorString = "." .. ClientRaycastWeaponConfig.SYSTEM_TAG_NAME
+
+	const backpack = localPlayer.Backpack
+	if(backpack) then
+		const backpackWeapons: {Tool?} = backpack:QueryDescendants(selectorString)
+		for _, weapon in backpackWeapons do
+			DeinitializeRaycastWeapon(weapon)
+		end
+	end
+
+	const playerCharacter = localPlayer.Character
+	if(playerCharacter) then
+		const characterWeapons: {Tool?} = playerCharacter:QueryDescendants(selectorString)
+		for _, weapon in characterWeapons do
+			DeinitializeRaycastWeapon(weapon)
+		end
+	end
+end
+
+const function BindDeathCleanupToHumanoid(player: Player)
+	Promise.try(function()
+		local character = player.Character
+		if(not character) then
+			character = player.CharacterAdded:Wait()
+		end
+
+		const humanoid = character:WaitForChild("Humanoid")
+		const humanoidIsValid = AssertHelper.ExpectedValAssert(
+			typeof(humanoid) == "Instance"
+				and humanoid:IsA("Humanoid"),
+			humanoid,
+			"humanoid",
+			"Humanoid"
+		)
+		if(not humanoidIsValid) then return end
+
+		humanoid.Died:Connect(CleanupOnCharacterDeath)
+	end)
+		:catch(function(errorMsg)
+			AssertHelper.Warn(tostring(errorMsg))
+		end)
+end
+
+const function ReloadWeapon(weapon: Tool)
+	const toolIsValidFn = t.instanceIsA("Tool")
+	const weaponIsValid, weaponInvalidReason = toolIsValidFn(weapon)
+	if(not weaponIsValid) then 
+		AssertHelper.Warn(weaponInvalidReason)
+		return 
+	end
+	
+	const ammo = weapon:GetAttribute("A_Ammo")
+	const ammoIsValid, ammoInvalidReason = t.number(ammo)
+	if(not ammoIsValid) then
+		AssertHelper.Warn(ammoInvalidReason)
+		return
+	end
+	
+	const maxAmmo = weapon:GetAttribute("A_MaxAmmo")
+	const maxAmmoIsValid, maxAmmoInvalidReason = t.number(maxAmmo)
+	
+	if(not maxAmmoIsValid) then
+		AssertHelper.Warn(maxAmmoInvalidReason)
+		return
+	end
+	
+	
+	if(ammo == maxAmmo) then return end
+	
+	const raycastWeaponStateComp: RaycastWeaponStateComponent.RaycastWeaponStateComponent? = SystemManagerModule.GetComponentByEntity("RaycastWeaponState", weapon)
+	const raycastWeaponStateCompIsValid, raycastWeaponStateCompInvalidReason = t.table(raycastWeaponStateComp)
+	if(not raycastWeaponStateCompIsValid) then
+		AssertHelper.Warn(raycastWeaponStateCompInvalidReason)
+		return
+	end
+	
+	
+	
+	const weaponPivot = weapon:GetPivot()
+	const weaponPosition = weaponPivot.Position
+	
+	const baseReloadSoundConfig = SoundConfig.clientSoundConfigs.Gun.PistolReload
+	const baseReloadSoundConfigIsValid, baseReloadSoundConfigInvalidReason = t.table(baseReloadSoundConfig)
+	if(not baseReloadSoundConfigIsValid) then
+		AssertHelper.Warn(baseReloadSoundConfigInvalidReason)
+		return
+	end
+	
+	const reloadTime: number? = weapon:GetAttribute(ClientRaycastWeaponConfig.RELOAD_ATTR_NAME)
+	const reloadTimeIsValid, reloadTimeInvalidReason = t.number(reloadTime)
+	if(not reloadTimeIsValid) then
+		AssertHelper.Warn(reloadTimeInvalidReason)
+		return
+	end
+	
+	Promise.try(function()
+		raycastWeaponStateComp.WeaponState = RaycastWeaponStateComponentConfig.raycastWeaponStates.Reloading.Name
+		TimeHelper.CreateCountdownInSeconds(reloadTime)
+		raycastWeaponStateComp.WeaponState = RaycastWeaponStateComponentConfig.raycastWeaponStates.Idle.Name
+	end)
+		:catch(function(err)
+			AssertHelper.Warn(tostring(err))
+		end)
+	
+	reloadWeaponRE:FireServer(weapon)
+	ClientSoundReplicationService.PlaySoundFromPosition(weaponPosition, baseReloadSoundConfig)
+
 end
 
 local function InitializeRaycastWeapon(weapon: Tool)
@@ -234,15 +496,98 @@ local function InitializeRaycastWeapon(weapon: Tool)
 		weaponTroves[weapon] = Trove.new()
 	end
 	
+	const raycastWeaponStateCompExists = SystemManagerModule.DoesEntityComponentExist("RaycastWeaponState", weapon)
+	local raycastWeaponStateComp: RaycastWeaponStateComponent.RaycastWeaponStateComponent? = nil
+	if(not raycastWeaponStateCompExists) then
+		raycastWeaponStateComp = SystemManagerModule.AddComponent("RaycastWeaponState", weapon)
+	else
+		raycastWeaponStateComp = SystemManagerModule.GetComponentByEntity("RaycastWeaponState", weapon)
+		const inCooldown = raycastWeaponStateComp.InCooldown
+		if(inCooldown) then
+			return
+		end
+	end
+	
+	const raycastWeaponStateCompIsValid, raycastWeaponStateCompInvalidReason = t.table(raycastWeaponStateComp)
+	if(not raycastWeaponStateCompIsValid) then
+		AssertHelper.Warn(raycastWeaponStateCompInvalidReason)
+		return
+	end
+	
+	const ammoAttribute = weapon:GetAttribute("A_Ammo")
+	const ammoAttributeIsValid, ammoAttributeInvalidReason = t.number(ammoAttribute)
+	if(not ammoAttributeIsValid) then
+		AssertHelper.Warn(ammoAttributeInvalidReason)
+		return
+	end
+	raycastWeaponStateComp.PredictedWeaponAmmo = ammoAttribute 
 	local currentWeaponTrove: Trove.Trove = weaponTroves[weapon]
+	
+	const weaponFireRate: number? = weapon:GetAttribute(ClientRaycastWeaponConfig.FIRE_RATE_ATTR_NAME)	
+	const numberIsMin0Fn = t.numberMin(0)
+	const weaponFireRateIsValid, weaponFireRateInvalidReason = numberIsMin0Fn(weaponFireRate)
+	if(not weaponFireRateIsValid) then
+		AssertHelper.Warn(weaponFireRateInvalidReason)
+		return
+	end
 	
 	currentWeaponTrove:Add(weapon.Equipped:Connect(function(_)
 		UserInputService.MouseIcon = raycastWeaponCursor
 		InputSignals.InputContextEnabledChanged:Fire(usingRaycastWeaponInputContext, true)
+		const weaponHasAmmo: boolean = RaycastWeaponHelper.HasAmmoAttribute(weapon)
+		
+		if(weaponHasAmmo) then
+			const screenGuiValidFn = t.instanceIsA("ScreenGui")
+			const ammoScreenGuiIsValid, screenGuiInvalidReason = screenGuiValidFn(ammoScreenGui)
+			if(not ammoScreenGuiIsValid) then
+				AssertHelper.Warn(screenGuiInvalidReason)
+			else
+				Promise.try(function()
+					InitializeAmmoUi(weapon)
+				end)
+					:catch(function(err)
+						AssertHelper.Warn(tostring(err))
+					end)
 
+			end
+		end
+		
+
+		if UserInputService.PreferredInput == Enum.PreferredInput.Touch and mobileActionButtonsScreenGui then
+			mobileCrosshairScreenGui.Enabled = true
+			mobileActionButtonsScreenGui.Enabled = true
+		end
 	end))
-	
+	currentWeaponTrove:Add(reloadInputAction.Pressed:Connect(function()
+		const raycastWeaponStateComp: RaycastWeaponStateComponent.RaycastWeaponStateComponent? = SystemManagerModule.GetComponentByEntity("RaycastWeaponState", weapon)
+		const raycastWeaponStateCompIsValid, weaponStateCompInvalidReason = t.table(raycastWeaponStateComp)
+		if(not raycastWeaponStateCompIsValid) then
+			AssertHelper.Warn(weaponStateCompInvalidReason)
+			return
+		end
+		
+		if(raycastWeaponStateComp.WeaponState ~= RaycastWeaponStateComponentConfig.raycastWeaponStates.Idle.Name) then return end
+		ReloadWeapon(weapon)
+	end))
 	currentWeaponTrove:Add(fireWeaponInputAction.Pressed:Connect(function(touch)
+		if(raycastWeaponStateComp.InCooldown) then return end
+		const raycastWeaponStateComp: RaycastWeaponStateComponent.RaycastWeaponStateComponent? = SystemManagerModule.GetComponentByEntity("RaycastWeaponState", weapon)
+		const raycastWeaponStateCompIsValid, weaponStateCompInvalidReason = t.table(raycastWeaponStateComp)
+		if(not raycastWeaponStateCompIsValid) then
+			AssertHelper.Warn(weaponStateCompInvalidReason)
+			return
+		end
+
+		if(raycastWeaponStateComp.WeaponState ~= RaycastWeaponStateComponentConfig.raycastWeaponStates.Idle.Name) then return end
+		raycastWeaponStateComp.InCooldown = true
+		task.spawn(function()
+			const endTime = workspace:GetServerTimeNow() + weaponFireRate
+ 			TimeHelper.CreateCountdownUntilServerEndTime(endTime)
+			raycastWeaponStateComp.InCooldown = false
+		end)
+		
+		if(raycastWeaponStateComp.PredictedWeaponAmmo <= 0) then return end
+		raycastWeaponStateComp.PredictedWeaponAmmo -= 1
 		FireRaycastWeaponFromMousePosition(weapon)
 		
 	end))
@@ -250,10 +595,16 @@ local function InitializeRaycastWeapon(weapon: Tool)
 	currentWeaponTrove:Add(weapon.Unequipped:Connect(function()
 		UserInputService.MouseIcon = ""
 		InputSignals.InputContextEnabledChanged:Fire(usingRaycastWeaponInputContext, false)
-
+		DeinitializeAmmoUi()
+		
+		if mobileActionButtonsScreenGui then
+			mobileCrosshairScreenGui.Enabled = false
+			mobileActionButtonsScreenGui.Enabled = false
+		end
 	end))
 	
 	localPlayer.CharacterRemoving:Once(function()
+		if(not weaponTroves[weapon]) then return end
 		weaponTroves[weapon]:Clean()
 		
 		weaponTroves[weapon] = nil
@@ -314,28 +665,84 @@ local function ToolMannedByWeapon(player: Player, weapon: Model)
 		
 end
 
+const function InitializeUiElements()
+	const localPlayer = Players.LocalPlayer
+	const playerGui = localPlayer:WaitForChild("PlayerGui")
+	
+	ammoScreenGui = playerGui:WaitForChild("Ammo")
+	mobileActionButtonsScreenGui = playerGui:WaitForChild("MobileActionButtons")
+	fireMobileButton = mobileActionButtonsScreenGui:WaitForChild("ShootButton")
+	reloadMobileButton = mobileActionButtonsScreenGui:WaitForChild("ReloadButton")
+	
+	mobileCrosshairScreenGui = playerGui:WaitForChild("MobileCrosshair")
+	const crosshairContainer = mobileCrosshairScreenGui:WaitForChild("Container")
+	crosshair = crosshairContainer:WaitForChild("Crosshair")
+end
+
+const function InitializeRaycastMobileActionButtons()
+	const buttonIsValidFn = t.instanceIsA("ImageButton")
+	const fireButtonIsValid, fireButtonInvalidReason = buttonIsValidFn(fireMobileButton)
+	
+	if(not fireButtonIsValid) then
+		AssertHelper.Warn(fireButtonInvalidReason)
+		return
+	end
+	
+	const reloadButtonIsValid, reloadButtonInvalidReason = buttonIsValidFn(reloadMobileButton)
+	if(not reloadButtonIsValid) then
+		AssertHelper.Warn(reloadButtonInvalidReason)
+		return
+	end
+	fireWeaponTouchBinding.UIButton = fireMobileButton
+	reloadTouchBinding.UIButton = reloadMobileButton
+end
+
+
 function ClientRaycastWeaponSystem.Initialize()
-	InitializeExistingRaycastWeapons()
-	
-	
-	CollectionService:GetInstanceAddedSignal(ClientRaycastWeaponConfig.SYSTEM_TAG_NAME):Connect(function(instance: Instance)
-		if(not instance:IsA("Tool")) then
-			return
-		end
-		
-		local localPlayer = Players.LocalPlayer
-		local localPlayerIsValid = AssertHelper.ExpectedValAssert(
+	Promise.try(function()
+		InitializeUiElements()
+		InitializeRaycastMobileActionButtons()
+		InitializeExistingRaycastWeapons()
+
+		const localPlayer = Players.LocalPlayer
+		const localPlayerIsValid = AssertHelper.ExpectedValAssert(
 			typeof(localPlayer) == "Instance"
 				and localPlayer:IsA("Player"),
 			localPlayer,
 			"localPlayer",
 			"Player"
 		)
-		if(not localPlayerIsValid) then return end
-		local toolHeldByLocalPlayer: boolean? = ToolMannedByWeapon(localPlayer, instance)
-		if(not toolHeldByLocalPlayer) then return end
-		InitializeRaycastWeapon(instance)
+		if(localPlayerIsValid) then
+			BindDeathCleanupToHumanoid(localPlayer)
+
+			localPlayer.CharacterAdded:Connect(function(_)
+				BindDeathCleanupToHumanoid(localPlayer)
+			end)
+		end
+
+		CollectionService:GetInstanceAddedSignal(ClientRaycastWeaponConfig.SYSTEM_TAG_NAME):Connect(function(instance: Instance)
+			if(not instance:IsA("Tool")) then
+				return
+			end
+
+			local localPlayer = Players.LocalPlayer
+			local localPlayerIsValid = AssertHelper.ExpectedValAssert(
+				typeof(localPlayer) == "Instance"
+					and localPlayer:IsA("Player"),
+				localPlayer,
+				"localPlayer",
+				"Player"
+			)
+			if(not localPlayerIsValid) then return end
+			local toolHeldByLocalPlayer: boolean? = ToolMannedByWeapon(localPlayer, instance)
+			if(not toolHeldByLocalPlayer) then return end
+			InitializeRaycastWeapon(instance)
+		end)
 	end)
+		:catch(function(err)
+			AssertHelper.Warn(tostring(err))
+		end)
+	
 end
 
 return ClientRaycastWeaponSystem

@@ -25,7 +25,7 @@ const CharacterConfig = require("../../../Shared/Constants/CharacterConfig")
 const CharacterHelper = require("../../../Helpers/Character/CharacterHelper")
 const DataModelHelper = require("../../../Helpers/DataModel/DataModelHelper")
 const AssertHelper = require("../../../Helpers/Debug/AssertHelper")
-const CuffHelper = require("../../../Helpers/Cuff/CuffHelper")
+const ClientCuffHelper = require("../../../Helpers/Cuff/ClientCuffHelper")
 const ClientCuffSystemSignals = require("../ClientCuffSystem/Signals")
 const Trove = require("../../../Utilities/Trove")
 
@@ -77,7 +77,7 @@ const function AddCuffPrompt(player: Player, handcuffs: Tool)
 	prompt.Name = "CuffPrompt"
 	CollectionService:AddTag(prompt, ToolPromptSystemConfig.CUFF_PROMPT_TAG)
 	
-	const localPlayerIsCuffingThisPlayer = CuffHelper.LocalPlayerIsCuffingPlayer(localPlayer, player)
+	const localPlayerIsCuffingThisPlayer = ClientCuffHelper.LocalPlayerIsCuffingPlayer(localPlayer, player)
 
 	if localPlayerIsCuffingThisPlayer then
 		prompt.ActionText = "Release Player"
@@ -314,8 +314,8 @@ const function AddPromptsForHandcuffs(handcuffs: Tool)
 		
 		
 		Promise.try(function()
-			const localPlayerIsCuffing: boolean = CuffHelper.LocalPlayerIsCuffing(localPlayer)
-			const localPlayerIsCuffingTargetCharacter: boolean = CuffHelper.LocalPlayerIsCuffingPlayerByAttachments(localPlayer, player)
+			const localPlayerIsCuffing: boolean = ClientCuffHelper.LocalPlayerIsCuffing(localPlayer)
+			const localPlayerIsCuffingTargetCharacter: boolean = ClientCuffHelper.LocalPlayerIsCuffingPlayerByAttachments(localPlayer, player)
 			if(localPlayerIsCuffing and localPlayerIsCuffingTargetCharacter) then
 				ClientCuffService.RemoveCuffConstraints(localPlayer)
 				-- Remove transparent arrow attachments
@@ -325,11 +325,9 @@ const function AddPromptsForHandcuffs(handcuffs: Tool)
 					end
 				end
 				ClientCuffService.SetCuffState(ClientCuffSystemConfig.cuffStates.Idle.Name)
-				prompt.ActionText = "Cuff Player"
 				setPlayerCuffedStateRE:FireServer(player, false)
 			elseif(not localPlayerIsCuffing and not localPlayerIsCuffingTargetCharacter) then
 				
-				prompt.ActionText = "Release Player"
 				setPlayerCuffedStateRE:FireServer(player, true)
 
 			end
@@ -353,6 +351,57 @@ const function AddPromptsForHandcuffs(handcuffs: Tool)
 			AssertHelper.Warn(tostring(err))
 		end)
 	
+	local function SetPromptActionText(humanoidRootPart: BasePart, actionText: string, expectedCurrentText: string?)
+		local prompt = humanoidRootPart:WaitForChild("CuffPrompt")
+		if prompt and prompt:IsA("ProximityPrompt") then
+			if expectedCurrentText and prompt.ActionText ~= expectedCurrentText then
+				return
+			end
+			prompt.ActionText = actionText
+		end
+	end
+
+	local function OnCuffStateChanged(newCuffState: string)
+		if newCuffState == ClientCuffSystemConfig.cuffStates.Cuffing.Name then
+			Promise.try(function()
+				local localCharacter = localPlayer.Character
+				if not localCharacter then return end
+
+				local localHumanoidRootPart = localCharacter:WaitForChild("HumanoidRootPart")
+				local cuffAlignPosition = localHumanoidRootPart:WaitForChild("CuffAlignPosition")
+				local cuffAlignOrientation = localHumanoidRootPart:WaitForChild("CuffAlignOrientation")
+
+				local targetAttachment = cuffAlignPosition.Attachment0
+				if not targetAttachment then return end
+
+				local targetHumanoidRootPart = targetAttachment.Parent
+				if not targetHumanoidRootPart then return end
+
+				SetPromptActionText(targetHumanoidRootPart, "Release Player")
+			end)
+				:catch(function(err)
+					AssertHelper.Warn(tostring(err))
+				end)
+		elseif newCuffState == ClientCuffSystemConfig.cuffStates.Idle.Name then
+			Promise.try(function()
+				local targetPlayers = GetPlayersForPromptAdd(localPlayer)
+				if not targetPlayers then return end
+
+				for _, player in targetPlayers do
+					local character = player.Character
+					if character then
+						local humanoidRootPart = character:WaitForChild("HumanoidRootPart")
+						SetPromptActionText(humanoidRootPart, "Cuff Player", "Release Player")
+					end
+				end
+			end)
+				:catch(function(err)
+					AssertHelper.Warn(tostring(err))
+				end)
+		end
+	end
+
+	const playerCuffStateChangedConn = ClientCuffSystemSignals.CuffStateChanged:Connect(OnCuffStateChanged)
 	
 	const playerRemovingConn = Players.PlayerRemoving:Connect(function(player: Player)
 		const promptHandlerComp: PromptHandlerComponent.PromptHandlerComponent = SystemManagerModule.GetComponentByEntity("PromptHandler", handcuffs)
@@ -387,6 +436,7 @@ const function AddPromptsForHandcuffs(handcuffs: Tool)
 	end)
 	globalPromptTrove:Add(playerAddedConn)
 	globalPromptTrove:Add(promptTriggeredConn)
+	globalPromptTrove:Add(playerCuffStateChangedConn)
 end
 
 

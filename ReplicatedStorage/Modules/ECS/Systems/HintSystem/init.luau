@@ -6,6 +6,7 @@ const remoteEventsFolder = ReplicatedStorage.Assets.Shared.Remotes.Events
 
 const sendHintRE = remoteEventsFolder.SendHint
 
+const ClientSoundService = require("../../Services/Sound/ClientSoundService")
 const AssertHelper = require("../../Helpers/Debug/AssertHelper")
 const Color3Helper = require("../../Helpers/Color/Color3Helper")
 const HintConfig = require("../../Shared/Constants/Hint/HintConfig")
@@ -77,10 +78,13 @@ local function ShowHint(message: string, color: HintConfig.HintColorName)
 	if(not textColor3) then return end
 	
 	const r, g, b = Color3Helper.ToRGB(textColor3)
-	print(r)
-	print(g)
-	print(b)
+
 	if(not r or not g or not b) then return end
+	
+	const soundConfig = realColorEnum.SoundConfig
+	if(soundConfig) then
+		ClientSoundService.PlayLocalSound(soundConfig)
+	end
 	const textClone = hintTextContainerTemplate:Clone()
 	
 	local canvasGrpTween = TweenService:Create(textClone,
@@ -89,7 +93,7 @@ local function ShowHint(message: string, color: HintConfig.HintColorName)
 			Position = UDim2.new(hintContainer.Position.X.Scale, 
 				0, 
 				hintContainer.Position.Y.Scale,
-				50),
+				30),
 
 			GroupTransparency = 0
 		}
@@ -103,7 +107,7 @@ local function ShowHint(message: string, color: HintConfig.HintColorName)
 		canvasGrpTween:Play()
 
 		canvasGrpTween.Completed:Once(function()
-			task.delay(3, function()
+			task.delay(6, function()
 				canvasGrpTween = TweenService:Create(textClone,
 					containerTweenInfo,
 					{
@@ -118,8 +122,6 @@ local function ShowHint(message: string, color: HintConfig.HintColorName)
 				
 				canvasGrpTween.Completed:Once(function()
 					textClone:Destroy()
-					hintScreenGui.Enabled = false
-					print(playingTweens)
 
 					
 				end)

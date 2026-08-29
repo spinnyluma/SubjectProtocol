@@ -1,6 +1,8 @@
+const ClientSoundReplicationService = require("../SoundReplication/ClientSoundReplicationService")
 const AssertHelper = require("../../Helpers/Debug/AssertHelper")
 const SoundConfig = require("../../Shared/Constants/Sound/SoundConfig")
 const t = require("../../Utilities/t")
+
 local TweenService = game:GetService("TweenService")
 
 local ClientSoundService = {}
@@ -11,12 +13,8 @@ function ClientSoundService.PlayLocalSound(soundConfig: SoundConfig.SoundConfig)
 		AssertHelper.Warn(soundConfigInvalidityReason)
 		return
 	end
-	
-	local sound = Instance.new("Sound")
-	sound.SoundId = "rbxassetid://" .. soundConfig.SoundId
-	sound.Volume = soundConfig.Volume or 1
-	sound.Looped = soundConfig.Looped or false
-	sound.Parent = game:GetService("SoundService")
+	const sound = ClientSoundReplicationService.SetUpSoundFromSoundConfig(soundConfig)
+	sound.Parent = workspace
 	sound:Play()
 	return sound
 end

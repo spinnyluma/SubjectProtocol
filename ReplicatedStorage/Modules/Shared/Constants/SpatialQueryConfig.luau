@@ -21,7 +21,12 @@ local overlapParamsPresets = {
 	T_CellImprisonment = {
 		ExcludeInstances = {"Self"}
 	},
-	
+	T_Shop = {
+		ExcludeInstances = {"Self"}
+	},
+	T_ShopClose = {
+		ExcludeInstances = {"Self"}
+	}
 }
 
 local raycastParamsPresets = {
@@ -313,6 +318,8 @@ SpatialQueryConfig.overlapParams = {
 	T_Terminal = GetOverlapParams,
 	T_SafeZone = GetOverlapParams,
 	T_CellImprisonment = GetOverlapParams,
+	T_Shop = GetOverlapParams,
+	T_ShopClose = GetOverlapParams
 }
 
 SpatialQueryConfig.raycastParams = {

@@ -304,13 +304,7 @@ function CharacterHelper.IsPartExistentInCharacter(character: Model, part: BaseP
 		"Model"
 	)
 	if(not characterIsValid) then return false end
-	
-	local foundPart: BasePart? = character:FindFirstChild(part.Name)
-	local foundPartIsValid: boolean = typeof(foundPart) == "Instance"
-		and foundPart:IsA("BasePart")
-	if(not foundPartIsValid) then return false end
-	
-	return foundPart == part
+	return part:IsDescendantOf(character)
 end
 
 

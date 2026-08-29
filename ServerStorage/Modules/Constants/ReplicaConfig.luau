@@ -22,6 +22,11 @@ ReplicaConfig.tokens = {
 		Token = Replica.Token(ClientReplicaConfig.replicaTokenNames.CurrentMode.Name),
 		Name = ClientReplicaConfig.replicaTokenNames.CurrentMode.Name,
 		Value = ClientReplicaConfig.replicaTokenNames.CurrentMode.Value
+	},
+	[ClientReplicaConfig.replicaTokenNames.PlayerStats.Name] = {
+		Token = Replica.Token(ClientReplicaConfig.replicaTokenNames.PlayerStats.Name),
+		Name = ClientReplicaConfig.replicaTokenNames.PlayerStats.Name,
+		Value = ClientReplicaConfig.replicaTokenNames.PlayerStats.Value
 	}
 }
 

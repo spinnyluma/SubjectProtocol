@@ -1,12 +1,16 @@
 local CollectionService = game:GetService("CollectionService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+const JointsService = game:GetService("JointsService")
 local ServerStorage = game:GetService("ServerStorage")
 local RunService = game:GetService("RunService")
 local Players = game:GetService("Players")
 
 local SystemManagerModuleConstants = require(script.SystemManagerModuleConstants)
 
+const ModuleLoaderConstants = require("../Framework/ModuleLoader/ModuleLoaderConstants")
+const TableHelper = require("../Helpers/Table/TableHelper")
 const Trove = require("../Utilities/Trove")
+const t = require("../Utilities/t")
 
 local AssertHelper = require(ReplicatedStorage
 	.Modules
@@ -874,14 +878,29 @@ local function InitializeUpdateSystem(systemModule: ModuleScript)
 	return true
 end
 
-local function GetSystemsFolder()
+local function GetSystems()
 	local isClient: boolean = RunService:IsClient()
 	local isServer: boolean = RunService:IsServer()
+	
 	if(isClient) then
-		return ReplicatedStorage.Modules.ECS.Systems
+		return ReplicatedStorage.Modules.ECS.Systems:GetChildren()
 	end
 	if(isServer) then
-		return ServerStorage.Modules.ECS.Systems
+		const replicatedModules = CollectionService:GetTagged(ModuleLoaderConstants.RUN_CONTEXT_TAGS.T_ReplicatedModule.Name)
+		const replicatedSystems = {}
+
+
+		const replicatedSystemsFolder = ReplicatedStorage.Modules.ECS.Systems
+		for _, replicatedModule in replicatedModules do
+			if(replicatedModule:IsDescendantOf(replicatedSystemsFolder)) then
+				table.insert(replicatedSystems, replicatedModule)
+			end
+		end
+		const systemsFolder = ServerStorage.Modules.ECS.Systems
+		const systemsChildren = systemsFolder:GetChildren()
+		
+		const joinedTable = TableHelper.JoinTables(systemsChildren, replicatedSystems)
+		return joinedTable
 	end
 end
 
@@ -1031,9 +1050,12 @@ local function InitializeSystem(systemModule: ModuleScript): boolean
 	end
 end
 
+
+
 local function InitializeSystems()
-	local systemsFolder: Folder = GetSystemsFolder()
-	for _, systemModule in systemsFolder:GetChildren() do
+	local joinedTable: Folder = GetSystems()
+	
+	for _, systemModule in joinedTable do
 		if systemModule:IsA("ModuleScript") then
 			local systemModuleName: string = systemModule.Name
 			
@@ -1059,8 +1081,8 @@ end
 	post the initialization (including initializing the update systems tick).
 ]]
 local function PostInitializeSystems()
-	local systemsFolder: Folder = GetSystemsFolder()
-	for _, systemModule in systemsFolder:GetChildren() do
+	local joinedTable: Folder = GetSystems()
+	for _, systemModule in joinedTable do
 		if systemModule:IsA("ModuleScript") then
 			local systemModuleName: string = systemModule.Name
 			

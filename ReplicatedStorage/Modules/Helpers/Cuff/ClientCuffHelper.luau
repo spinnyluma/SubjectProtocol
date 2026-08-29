@@ -4,9 +4,9 @@ local Players = game:GetService("Players")
 local t = require(ReplicatedStorage.Modules.Utilities.t)
 local AssertHelper = require(ReplicatedStorage.Modules.Helpers.Debug.AssertHelper)
 
-local CuffHelper = {}
+local ClientCuffHelper = {}
 
-function CuffHelper.LocalPlayerIsCuffingPlayer(localPlayer: Player, targetPlayer: Player)
+function ClientCuffHelper.LocalPlayerIsCuffingPlayer(localPlayer: Player, targetPlayer: Player)
 	const playerIsValidFn = t.instanceIsA("Player")
 	
 	const localPlayerIsValid, localPlayerInvalidityReason = playerIsValidFn(localPlayer)
@@ -49,7 +49,7 @@ function CuffHelper.LocalPlayerIsCuffingPlayer(localPlayer: Player, targetPlayer
 	return playerFromCharacter == targetPlayer
 end
 
-function CuffHelper.LocalPlayerIsCuffing(localPlayer: Player)
+function ClientCuffHelper.LocalPlayerIsCuffing(localPlayer: Player)
 	const playerIsValidFn = t.instanceIsA("Player")
 	
 	const playerIsValid, playerInvalidityReason = playerIsValidFn(localPlayer)
@@ -76,7 +76,7 @@ end
 
 
 
-function CuffHelper.LocalPlayerIsCuffingPlayerByAttachments(localPlayer: Player, targetPlayer: Player)
+function ClientCuffHelper.LocalPlayerIsCuffingPlayerByAttachments(localPlayer: Player, targetPlayer: Player)
 	const playerIsValidFn = t.instanceIsA("Player")
 
 	const localPlayerIsValid, localPlayerInvalidityReason = playerIsValidFn(localPlayer)
@@ -122,4 +122,4 @@ function CuffHelper.LocalPlayerIsCuffingPlayerByAttachments(localPlayer: Player,
 	return alignPositionAttachment0 == targetRootAttachment and alignOrientationAttachment0 == targetRootAttachment
 end
 
-return CuffHelper
+return ClientCuffHelper
