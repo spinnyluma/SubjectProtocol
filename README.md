@@ -1,4 +1,4 @@
-An old game project where two teams "Subjects" and "Guards" fight for control of a terminal placed in a facility. 
+An abandoned game project where two teams "Subjects" and "Guards" fight for control of a terminal placed in a facility. 
 
 ## Key systems
 - Server-authoritative raycast weapon system
